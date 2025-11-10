@@ -7,6 +7,70 @@ export function initialsFromName(name = '') {
   return letters.join('');
 }
 
+let lightboxInitialized = false;
+let activeLightbox = null;
+
+function closeLightbox() {
+  if (!activeLightbox) return;
+  document.body.classList.remove('lightbox-open');
+  activeLightbox.remove();
+  activeLightbox = null;
+}
+
+function openLightbox(src, alt) {
+  closeLightbox();
+  const overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+
+  const content = document.createElement('div');
+  content.className = 'lightbox-content';
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'lightbox-close';
+  closeButton.setAttribute('aria-label', 'Kapat');
+  closeButton.innerHTML = '&times;';
+  closeButton.addEventListener('click', closeLightbox);
+
+  const image = document.createElement('img');
+  image.src = src;
+  image.alt = alt || 'Görsel';
+
+  content.append(closeButton, image);
+  overlay.appendChild(content);
+
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) {
+      closeLightbox();
+    }
+  });
+
+  document.body.appendChild(overlay);
+  document.body.classList.add('lightbox-open');
+  activeLightbox = overlay;
+}
+
+export function initializeMediaLightbox() {
+  if (lightboxInitialized) return;
+  lightboxInitialized = true;
+
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-lightbox-src], img[data-lightbox]');
+    if (!trigger) return;
+    const src = trigger.getAttribute('data-lightbox-src') || trigger.getAttribute('src');
+    if (!src) return;
+    const alt = trigger.getAttribute('data-lightbox-alt') || trigger.getAttribute('alt') || 'Görsel';
+    event.preventDefault();
+    openLightbox(src, alt);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeLightbox();
+    }
+  });
+}
+
 function createContactRow(icon, value, href) {
   if (!value) {
     return null;

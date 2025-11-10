@@ -10,9 +10,94 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const MEDIA_ROOT = path.join(PUBLIC_DIR, 'uploads');
+const PROVIDER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'providers');
+const CUSTOMER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'customers');
 
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+async function ensureDir(dirPath) {
+  await fs.mkdir(dirPath, { recursive: true });
+}
+
+async function ensureMediaRoots() {
+  await Promise.all([
+    ensureDir(DATA_DIR),
+    ensureDir(MEDIA_ROOT),
+    ensureDir(PROVIDER_MEDIA_ROOT),
+    ensureDir(CUSTOMER_MEDIA_ROOT),
+  ]);
+}
+
+function isDataUrl(value) {
+  return typeof value === 'string' && value.startsWith('data:');
+}
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
+  if (!match) {
+    throw new Error('Geçersiz veri URLsi.');
+  }
+  const mime = match[1];
+  const base64 = match[2];
+  const buffer = Buffer.from(base64, 'base64');
+  const extension = (() => {
+    if (!mime) return 'bin';
+    if (mime === 'image/jpeg') return 'jpg';
+    if (mime === 'image/png') return 'png';
+    if (mime === 'image/gif') return 'gif';
+    if (mime === 'image/webp') return 'webp';
+    if (mime === 'image/svg+xml') return 'svg';
+    const [, subtype] = mime.split('/');
+    return subtype || 'bin';
+  })();
+
+  return { buffer, extension, mime };
+}
+
+function toPublicPath(filePath) {
+  const relative = path.relative(PUBLIC_DIR, filePath);
+  return `/${relative.split(path.sep).join('/')}`;
+}
+
+function fromPublicPath(publicPath) {
+  if (!publicPath) return null;
+  const cleaned = publicPath.replace(/^\/+/, '');
+  return path.join(PUBLIC_DIR, cleaned);
+}
+
+async function saveDataUrlToFile(dataUrl, baseDir, prefix) {
+  if (!isDataUrl(dataUrl)) {
+    return dataUrl;
+  }
+  await ensureDir(baseDir);
+  const { buffer, extension } = parseDataUrl(dataUrl);
+  const fileName = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${extension}`;
+  const destination = path.join(baseDir, fileName);
+  await fs.writeFile(destination, buffer);
+  return toPublicPath(destination);
+}
+
+async function removeFile(publicPath) {
+  if (!publicPath) {
+    return;
+  }
+  const absolute = fromPublicPath(publicPath);
+  if (!absolute) return;
+  try {
+    await fs.unlink(absolute);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
+ensureMediaRoots().catch((error) => {
+  console.error('Medya klasörleri oluşturulamadı:', error);
+});
 
 async function readJson(filePath) {
   const data = await fs.readFile(filePath, 'utf8');
@@ -44,10 +129,21 @@ function buildProviderSummary(user) {
 
   const firstName = profile.firstName || '';
   const lastName = profile.lastName || '';
+  const emailName = user.email ? user.email.split('@')[0] : '';
+  let fullName = `${firstName} ${lastName}`.trim();
+  if (!fullName) {
+    fullName = profile.profession || '';
+  }
+  if (!fullName) {
+    fullName = emailName;
+  }
+  if (!fullName) {
+    fullName = 'Trabzon Ustası';
+  }
 
   return {
     id: user.id,
-    fullName: `${firstName} ${lastName}`.trim() || profile.profession || 'Usta',
+    fullName,
     firstName,
     lastName,
     profession: profile.profession || '',
@@ -57,7 +153,11 @@ function buildProviderSummary(user) {
     rating,
     reviewCount: reviews.length,
     completedJobs: (user.stats && user.stats.completedJobs) || 0,
-    contact: profile.contact || {},
+    contact: {
+      phone: (profile.contact && profile.contact.phone) || '',
+      email: (profile.contact && profile.contact.email) || user.email,
+      website: (profile.contact && profile.contact.website) || '',
+    },
     avatar: profile.avatar || '',
     banner: profile.banner || '',
     gallery: profile.gallery || [],
@@ -166,17 +266,72 @@ app.put('/api/providers/:id', async (req, res) => {
     } = req.body;
 
     user.profile = user.profile || {};
-    if (firstName !== undefined) user.profile.firstName = firstName;
-    if (lastName !== undefined) user.profile.lastName = lastName;
-    if (profession !== undefined) user.profile.profession = profession;
-    if (city !== undefined) user.profile.city = city;
-    if (about !== undefined) user.profile.about = about;
-    if (category !== undefined) user.profile.category = category;
-    if (contact !== undefined) user.profile.contact = contact;
-    if (avatar !== undefined) user.profile.avatar = avatar;
-    if (banner !== undefined) user.profile.banner = banner;
+    if (firstName !== undefined) user.profile.firstName = (firstName || '').trim();
+    if (lastName !== undefined) user.profile.lastName = (lastName || '').trim();
+    if (profession !== undefined) user.profile.profession = (profession || '').trim();
+    if (city !== undefined) user.profile.city = (city || '').trim();
+    if (about !== undefined) user.profile.about = about || '';
+    if (category !== undefined) user.profile.category = (category || '').trim();
+    if (contact !== undefined) {
+      user.profile.contact = {
+        phone: contact?.phone || '',
+        email: contact?.email || user.email,
+        website: contact?.website || '',
+      };
+    }
+
+    const providerBaseDir = path.join(PROVIDER_MEDIA_ROOT, user.id);
+    const avatarDir = path.join(providerBaseDir, 'avatar');
+    const bannerDir = path.join(providerBaseDir, 'banner');
+    const galleryDir = path.join(providerBaseDir, 'gallery');
+
+    const previousAvatar = user.profile.avatar || '';
+    const previousBanner = user.profile.banner || '';
+    const previousGallery = Array.isArray(user.profile.gallery) ? [...user.profile.gallery] : [];
+
+    if (avatar !== undefined) {
+      if (!avatar) {
+        await removeFile(previousAvatar);
+        user.profile.avatar = '';
+      } else {
+        const storedAvatar = await saveDataUrlToFile(avatar, avatarDir, 'avatar');
+        if (storedAvatar !== previousAvatar) {
+          await removeFile(previousAvatar);
+        }
+        user.profile.avatar = storedAvatar;
+      }
+    }
+
+    if (banner !== undefined) {
+      if (!banner) {
+        await removeFile(previousBanner);
+        user.profile.banner = '';
+      } else {
+        const storedBanner = await saveDataUrlToFile(banner, bannerDir, 'banner');
+        if (storedBanner !== previousBanner) {
+          await removeFile(previousBanner);
+        }
+        user.profile.banner = storedBanner;
+      }
+    }
+
     if (Array.isArray(gallery)) {
-      user.profile.gallery = gallery;
+      const normalizedGallery = [];
+      for (const item of gallery) {
+        if (!item) {
+          continue;
+        }
+        if (isDataUrl(item)) {
+          // eslint-disable-next-line no-await-in-loop
+          const stored = await saveDataUrlToFile(item, galleryDir, 'gallery');
+          normalizedGallery.push(stored);
+        } else {
+          normalizedGallery.push(item);
+        }
+      }
+      const removed = previousGallery.filter((existing) => !normalizedGallery.includes(existing));
+      await Promise.all(removed.map((file) => removeFile(file)));
+      user.profile.gallery = normalizedGallery;
     }
 
     await saveUsers(users);
@@ -235,7 +390,22 @@ app.put('/api/customers/:id', async (req, res) => {
     if (city !== undefined) user.profile.city = city;
     if (email !== undefined) user.profile.email = email;
     if (phone !== undefined) user.profile.phone = phone;
-    if (avatar !== undefined) user.profile.avatar = avatar;
+    const customerBaseDir = path.join(CUSTOMER_MEDIA_ROOT, user.id);
+    const avatarDir = path.join(customerBaseDir, 'avatar');
+    const previousAvatar = user.profile.avatar || '';
+
+    if (avatar !== undefined) {
+      if (!avatar) {
+        await removeFile(previousAvatar);
+        user.profile.avatar = '';
+      } else {
+        const storedAvatar = await saveDataUrlToFile(avatar, avatarDir, 'avatar');
+        if (storedAvatar !== previousAvatar) {
+          await removeFile(previousAvatar);
+        }
+        user.profile.avatar = storedAvatar;
+      }
+    }
 
     await saveUsers(users);
     res.json(sanitizeUser(user));

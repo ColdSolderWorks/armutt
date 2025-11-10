@@ -9,6 +9,8 @@ TrabzonİşBul, Armut benzeri bir hizmet pazaryerini yalnızca Node.js kullanara
 - `Ustalar` sayfasında kategori filtresi ve arama desteğiyle Facebook benzeri profil kartları
 - Rol seçimiyle kayıt ve `bcrypt` korumalı kimlik doğrulama uçları
 - Usta panelinde kapak/başlık alanı, profil fotoğrafı, iletişim, medya (profil, banner, galeri) yönetimi ve taleplere teklif gönderme
+- Her usta için `public/uploads/providers/{id}` yapısında avatar, banner ve galeri klasörleri; müşteriler için `public/uploads/customers/{id}/avatar`
+- Galerideki tüm görseller için ışık kutusu (lightbox) ile tam ekran ön izleme ve animasyonlarla zenginleştirilmiş arayüz
 - Müşteri panelinde Facebook profiline benzer görünüm, profil güncelleme, yeni hizmet talebi açma ve gelen teklifleri puanlayarak kabul etme
 - Talep-teklif akışının JSON dosyaları üzerinde saklanması; kabul edilen teklifler usta istatistiklerini günceller ve yorumları günceller
 
@@ -28,6 +30,7 @@ Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. S
 | `data/users.json` | Kullanıcı hesapları, roller, `bcrypt` hash'leri ve profil alanları |
 | `data/requests.json` | Müşteri talepleri, ustaların teklifleri ve kabul durumları |
 | `data/providers.json` | İsteğe bağlı örnek veri dosyası; uygulama kayıtlı ustalardan liste üretir |
+| `public/uploads/` | Sunucu tarafından oluşturulan medya klasörleri (usta/müşteri avatar, banner, galeri görselleri) |
 
 > Not: Depo ilk kurulduğunda tüm JSON dosyaları boştur. Deneyimlemek için önce kayıt olup rollere göre giriş yapın.
 
@@ -58,10 +61,10 @@ Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. S
 - `POST /api/requests/:requestId/offers` — ustaların taleplere teklif göndermesi
 - `POST /api/requests/:requestId/offers/:offerId/accept` — müşterinin teklifi opsiyonel puan ve yorumla kabul etmesi
 
-Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. Görsel alanları base64 veri URI olarak saklanır.
+Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. Medya alanları (avatar, banner, galeri) güncellendiğinde içerikler otomatik olarak `public/uploads` altında ilgili kullanıcı klasörlerine kaydedilir ve API yalnızca göreli dosya yolunu döndürür.
 
 ## Geliştirme Notları
 
 - JSON dosyaları eşzamanlı yazıldığından gerçek projelerde kilitleme veya satır içi kuyruklama gibi önlemler eklenebilir.
 - Üretim ortamında oturum yönetimi veya JWT tabanlı kimlik doğrulama tercih edilmelidir.
-- Dosya yüklemeleri demonstrasyon amaçlı base64 formatında tutulur; gerçek senaryolarda kalıcı dosya depolaması önerilir.
+- Görsel yüklemeleri otomatik olarak disk üzerinde saklanır; base64 veri URI'ları istemci oturumunda tutulmaz.

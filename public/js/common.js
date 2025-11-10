@@ -50,10 +50,32 @@ export function updateSessionProfile(patch) {
   }
   const nextProfile = {
     ...(session.profile || {}),
-    ...patch,
+    ...stripDataUrls(patch || {}),
   };
   const nextSession = { ...session, profile: nextProfile };
   setSession(nextSession);
+}
+
+function stripDataUrls(value) {
+  if (typeof value === 'string') {
+    return value.startsWith('data:') ? '' : value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripDataUrls(item))
+      .filter((item) => item !== undefined && item !== null && item !== '');
+  }
+  if (value && typeof value === 'object') {
+    const result = {};
+    Object.entries(value).forEach(([key, entry]) => {
+      const cleaned = stripDataUrls(entry);
+      if (cleaned !== undefined) {
+        result[key] = cleaned;
+      }
+    });
+    return result;
+  }
+  return value;
 }
 
 export async function apiRequest(path, options = {}) {

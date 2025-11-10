@@ -10,12 +10,14 @@ import {
   formatDate,
   createStatusPill,
 } from './common.js';
-import { initialsFromName } from './ui.js';
+import { initialsFromName, initializeMediaLightbox } from './ui.js';
 
 const session = ensureRole('usta');
 if (!session) {
   throw new Error('Yetkisiz erişim');
 }
+
+initializeMediaLightbox();
 
 const feedback = document.getElementById('provider-feedback');
 const summaryBadge = document.getElementById('provider-summary');
@@ -39,6 +41,13 @@ attachLogout(document.getElementById('logout'));
 document.title = `Usta Paneli | ${session.profile?.firstName || 'TrabzonİşBul'}`;
 
 let providerData = null;
+
+function patchLocalSessionProfile(patch) {
+  session.profile = {
+    ...(session.profile || {}),
+    ...patch,
+  };
+}
 
 function renderHero() {
   if (!providerData) return;
@@ -145,7 +154,7 @@ function renderMedia() {
     avatarEl.className = 'list-item';
     avatarEl.innerHTML = `
       <strong>Profil Fotoğrafı</strong>
-      <div class="media-preview"><img src="${avatar}" alt="Profil" /></div>
+      <div class="media-preview"><img src="${avatar}" alt="Profil" data-lightbox="provider-media" data-lightbox-src="${avatar}" data-lightbox-alt="Profil fotoğrafı" /></div>
       <div class="gallery-actions">
         <button class="button secondary" type="button" data-remove="avatar">Kaldır</button>
       </div>
@@ -158,7 +167,7 @@ function renderMedia() {
     bannerEl.className = 'list-item';
     bannerEl.innerHTML = `
       <strong>Banner</strong>
-      <div class="media-preview"><img src="${banner}" alt="Banner" /></div>
+      <div class="media-preview"><img src="${banner}" alt="Banner" data-lightbox="provider-media" data-lightbox-src="${banner}" data-lightbox-alt="Kapak fotoğrafı" /></div>
       <div class="gallery-actions">
         <button class="button secondary" type="button" data-remove="banner">Kaldır</button>
       </div>
@@ -175,7 +184,7 @@ function renderMedia() {
     gallery.forEach((image, index) => {
       const wrapper = document.createElement('div');
       wrapper.innerHTML = `
-        <img src="${image}" alt="Galeri görseli ${index + 1}" />
+        <img src="${image}" alt="Galeri görseli ${index + 1}" data-lightbox="provider-media" data-lightbox-src="${image}" data-lightbox-alt="Galeri görseli ${index + 1}" />
         <div class="gallery-actions">
           <button class="button secondary" type="button" data-remove="gallery" data-index="${index}">Sil</button>
         </div>
@@ -211,11 +220,20 @@ profileForm?.addEventListener('submit', async (event) => {
   const formData = new FormData(profileForm);
   const payload = Object.fromEntries(formData.entries());
   try {
-    await apiRequest(`/api/providers/${session.id}`, {
+    const updated = await apiRequest(`/api/providers/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    updateSessionProfile(payload);
+    const profilePatch = {
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      profession: updated.profession,
+      category: updated.category,
+      city: updated.city,
+      about: updated.about,
+    };
+    updateSessionProfile(profilePatch);
+    patchLocalSessionProfile(profilePatch);
     renderAlert(feedback, 'success', 'Profil bilgileri güncellendi.');
     await loadProvider();
   } catch (error) {
@@ -235,11 +253,12 @@ contactForm?.addEventListener('submit', async (event) => {
   };
 
   try {
-    await apiRequest(`/api/providers/${session.id}`, {
+    const updated = await apiRequest(`/api/providers/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    updateSessionProfile({ contact: payload.contact });
+    updateSessionProfile({ contact: updated.contact });
+    patchLocalSessionProfile({ contact: updated.contact });
     renderAlert(feedback, 'success', 'İletişim bilgileri kaydedildi.');
     await loadProvider();
   } catch (error) {
@@ -272,11 +291,17 @@ mediaForm?.addEventListener('submit', async (event) => {
       return;
     }
 
-    await apiRequest(`/api/providers/${session.id}`, {
+    const updated = await apiRequest(`/api/providers/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-    updateSessionProfile(updates);
+    const mediaPatch = {
+      avatar: updated.avatar,
+      banner: updated.banner,
+      gallery: updated.gallery,
+    };
+    updateSessionProfile(mediaPatch);
+    patchLocalSessionProfile(mediaPatch);
     renderAlert(feedback, 'success', 'Medya içerikleri güncellendi.');
     mediaForm.reset();
     await loadProvider();
@@ -306,11 +331,17 @@ mediaPreview?.addEventListener('click', async (event) => {
   }
 
   try {
-    await apiRequest(`/api/providers/${session.id}`, {
+    const updated = await apiRequest(`/api/providers/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    updateSessionProfile(payload);
+    const removalPatch = {
+      avatar: updated.avatar,
+      banner: updated.banner,
+      gallery: updated.gallery,
+    };
+    updateSessionProfile(removalPatch);
+    patchLocalSessionProfile(removalPatch);
     renderAlert(feedback, 'success', 'Görsel kaldırıldı.');
     await loadProvider();
   } catch (error) {

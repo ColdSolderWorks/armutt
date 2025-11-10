@@ -1,5 +1,5 @@
 import { apiRequest } from './common.js';
-import { initialsFromName } from './ui.js';
+import { initialsFromName, initializeMediaLightbox } from './ui.js';
 
 const params = new URLSearchParams(window.location.search);
 const providerId = params.get('id');
@@ -17,6 +17,8 @@ const galleryGrid = document.getElementById('profile-gallery');
 const reviewsSection = document.getElementById('reviews-section');
 const reviewsEl = document.getElementById('profile-reviews');
 const ratingBadge = document.getElementById('profile-rating');
+
+initializeMediaLightbox();
 
 function createContactItem(label, value, href) {
   if (!value) {
@@ -51,6 +53,9 @@ function renderGallery(images = []) {
     const img = document.createElement('img');
     img.src = src;
     img.alt = `Galeri görseli ${index + 1}`;
+    img.dataset.lightbox = 'profile-gallery';
+    img.dataset.lightboxSrc = src;
+    img.dataset.lightboxAlt = `Galeri görseli ${index + 1}`;
     figure.appendChild(img);
     galleryGrid.appendChild(figure);
   });

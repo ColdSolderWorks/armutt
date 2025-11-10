@@ -3,7 +3,7 @@ import {
   attachLogout,
   apiRequest,
   renderAlert,
-  updateSessionProfile,
+  setSession,
   readFileAsDataUrl,
   formatDate,
   createStatusPill,
@@ -105,11 +105,15 @@ profileForm?.addEventListener('submit', async (event) => {
   }
 
   try {
-    await apiRequest(`/api/customers/${session.id}`, {
+    const updated = await apiRequest(`/api/customers/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    updateSessionProfile(payload);
+    setSession(updated);
+    session.profile = updated.profile || session.profile;
+    if (updated.email) {
+      session.email = updated.email;
+    }
     renderAlert(feedback, 'success', 'Profiliniz güncellendi.');
     profileForm.reset();
     await loadCustomer();
