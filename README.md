@@ -1,15 +1,14 @@
 # TrabzonİşBul
 
-TrabzonİşBul, Armut benzeri bir hizmet pazaryeri deneyimini Node.js ile uçtan uca yeniden oluşturan örnek uygulamadır. Kalıcı veritabanı yerine JSON dosyaları kullanır ve kullanıcı şifrelerini `bcrypt` ile güvenli biçimde saklar.
+TrabzonİşBul, Armut benzeri bir hizmet pazaryerini yalnızca Node.js kullanarak yeniden oluşturan örnek projedir. Sunucu tarafı Express ile yazılmıştır; kalıcı veriler için ilişkisel veritabanı yerine JSON dosyaları kullanılır ve tüm parolalar `bcrypt` ile hashlenir.
 
 ## Özellikler
 
-- Express tabanlı REST API ve tek sunucu üzerinden servis edilen SPA arayüzü
-- `bcrypt` ile korunan kayıt/giriş uçları ve rol (Usta / Müşteri) seçimi
-- Usta panelinde profil, iletişim ve medya (profil, banner, galeri) yönetimi
-- Müşteri panelinde profil düzenleme, talep oluşturma ve gelen teklifleri kabul etme
-- Talep-teklif akışı: ustalar talep kartlarından teklif gönderir, müşteriler teklifleri puanlayarak onaylar
-- JSON dosyalarında saklanan kullanıcı, profil, yorum ve talep verileri
+- Express tabanlı REST API ve her özellik için ayrı hazırlanmış statik sayfalar (ana sayfa, giriş, kayıt, müşteri paneli, usta paneli)
+- Rol seçimiyle kayıt ve `bcrypt` korumalı kimlik doğrulama uçları
+- Usta panelinde profil, iletişim, medya (profil, banner, galeri) yönetimi ve taleplere teklif gönderme
+- Müşteri panelinde profil güncelleme, yeni hizmet talebi açma ve gelen teklifleri puanlayarak kabul etme
+- Talep-teklif akışının JSON dosyaları üzerinde saklanması; kabul edilen teklifler usta istatistiklerini günceller
 
 ## Kurulum
 
@@ -18,23 +17,17 @@ npm install
 npm start
 ```
 
-Uygulama varsayılan olarak [http://localhost:3000](http://localhost:3000) adresinde çalışır. Arayüz ve API aynı sunucu üzerinden sunulur.
-
-## Demo Hesapları
-
-| Rol | E-posta | Şifre |
-| --- | --- | --- |
-| Usta | `usta@trabzonisbul.com` | `Trabzon123` |
-| Müşteri | `musteri@trabzonisbul.com` | `Trabzon123` |
+Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. Sunucu statik dosyaları da aynı porttan servis eder; tarayıcıdan doğrudan `/login.html`, `/register.html`, `/customer-dashboard.html` ve `/provider-dashboard.html` sayfalarına erişebilirsiniz.
 
 ## JSON Deposu
 
 | Dosya | İçerik |
 | --- | --- |
-| `data/users.json` | Rol bilgileri, `bcrypt` ile hashlenmiş parolalar, usta/ müşteri profilleri ve yorumlar |
+| `data/users.json` | Kullanıcı hesapları, roller, `bcrypt` hash'leri ve profil alanları |
 | `data/requests.json` | Müşteri talepleri, ustaların teklifleri ve kabul durumları |
+| `data/providers.json` | İsteğe bağlı örnek veri dosyası; uygulama kayıtlı ustalardan liste üretir |
 
-> Not: Önceki sürümden kalan `data/providers.json` artık yalnızca örnek veri niteliğindedir; listelemeler kullanıcı kayıtlarından üretilir.
+> Not: Depo ilk kurulduğunda tüm JSON dosyaları boştur. Deneyimlemek için önce kayıt olup rollere göre giriş yapın.
 
 ## API Uçları
 
@@ -56,7 +49,6 @@ Uygulama varsayılan olarak [http://localhost:3000](http://localhost:3000) adres
 
 ### Talepler ve Teklifler
 
-- `GET /api/categories` — kategorileri ve usta sayılarını listeleme
 - `GET /api/requests` — tüm talepleri zaman sırasıyla listeleme
 - `GET /api/requests/customer/:customerId` — ilgili müşterinin talepleri ve gelen teklifleri
 - `GET /api/requests/provider/:providerId` — ustanın gönderdiği tekliflerin durumu
@@ -68,6 +60,6 @@ Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. G
 
 ## Geliştirme Notları
 
-- JSON dosyaları senkron biçimde güncellendiğinden eşzamanlı yazımlar için ek önlem gerekebilir.
-- Gerçek ortamda oturum yönetimi veya JWT tabanlı kimlik doğrulama eklenmesi önerilir.
-- Dosya yüklemeleri demonstrasyon amaçlı olarak base64 formatında kaydedilir; gerçek ortamda kalıcı dosya depolaması tercih edilmelidir.
+- JSON dosyaları eşzamanlı yazıldığından gerçek projelerde kilitleme veya satır içi kuyruklama gibi önlemler eklenebilir.
+- Üretim ortamında oturum yönetimi veya JWT tabanlı kimlik doğrulama tercih edilmelidir.
+- Dosya yüklemeleri demonstrasyon amaçlı base64 formatında tutulur; gerçek senaryolarda kalıcı dosya depolaması önerilir.

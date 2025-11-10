@@ -3,261 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TrabzonİşBul | Hizmet Profesyonellerini Keşfet</title>
+    <title>TrabzonİşBul | Karadeniz'in Hizmet Pazaryeri</title>
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <header class="hero">
-      <div class="container hero__content">
-        <div>
-          <h1>TrabzonİşBul</h1>
-          <p>
-            Trabzon ve çevresinde güvenilir hizmet profesyonelleri ile buluşun. Tek form ile ihtiyaçlarınızı belirtin,
-            teklifler kapınıza gelsin.
-          </p>
-          <a class="button" href="#auth">Hemen Başlayın</a>
-        </div>
-        <div class="hero__stats">
-          <div>
-            <span class="stat">450+</span>
-            <span>Hizmet Profesyoneli</span>
-          </div>
-          <div>
-            <span class="stat">25.000+</span>
-            <span>Mutlu Müşteri</span>
-          </div>
-        </div>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/login.html">Giriş Yap</a></li>
+            <li><a href="/register.html">Hesap Oluştur</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+          </ul>
+        </nav>
       </div>
     </header>
 
-    <main class="container">
-      <section id="categories" class="card">
-        <h2>Popüler Kategoriler</h2>
-        <div id="category-list" class="grid"></div>
-      </section>
-
-      <section id="providers" class="card">
-        <div class="section-header">
-          <h2>Öne Çıkan Hizmet Profesyonelleri</h2>
-          <select id="category-filter">
-            <option value="">Tüm Kategoriler</option>
-          </select>
-        </div>
-        <div id="provider-list" class="grid"></div>
-      </section>
-
-      <section id="requests" class="card">
-        <h2>Son Hizmet Talepleri</h2>
-        <div id="request-list" class="list"></div>
-      </section>
-
-      <section id="auth" class="card grid-auth">
+    <main>
+      <section class="hero">
         <div>
-          <h2>Kayıt Ol</h2>
-          <form id="register-form" class="form">
-            <label>
-              Rol
-              <select name="role" id="register-role" required>
-                <option value="musteri">Müşteri</option>
-                <option value="usta">Usta</option>
-              </select>
-            </label>
-            <div class="form-grid">
-              <label>
-                Ad
-                <input type="text" name="firstName" required />
-              </label>
-              <label>
-                Soyad
-                <input type="text" name="lastName" required />
-              </label>
-            </div>
-            <label class="role-field" data-role="usta">
-              Meslek Ünvanı
-              <input type="text" name="profession" placeholder="Örn. Boyacı Ustası" />
-            </label>
-            <label>
-              Şehir
-              <input type="text" name="city" placeholder="Trabzon" />
-            </label>
-            <label>
-              E-posta
-              <input type="email" name="email" required />
-            </label>
-            <label>
-              Şifre
-              <input type="password" name="password" required />
-            </label>
-            <button type="submit" class="button">Kayıt Ol</button>
-            <p class="form-hint">Demo müşteri: musteri@trabzonisbul.com / Trabzon123</p>
-            <p class="form-hint">Demo usta: usta@trabzonisbul.com / Trabzon123</p>
-            <p id="register-feedback" class="feedback"></p>
-          </form>
+          <h1>Trabzon'un ustaları ve müşterileri tek platformda buluşuyor</h1>
+          <p>
+            TrabzonİşBul, Karadeniz bölgesindeki profesyoneller ile kaliteli hizmet arayanları
+            bir araya getiren modern bir pazaryeridir. İster temizlik ister tadilat; doğru
+            ustayı dakikalar içinde bulun.
+          </p>
         </div>
-        <div>
-          <h2>Giriş Yap</h2>
-          <form id="login-form" class="form">
-            <label>
-              E-posta
-              <input type="email" name="email" required />
-            </label>
-            <label>
-              Şifre
-              <input type="password" name="password" required />
-            </label>
-            <button type="submit" class="button">Giriş Yap</button>
-            <p id="login-feedback" class="feedback"></p>
-            <div id="current-user" class="current-user"></div>
-          </form>
+        <div class="hero-actions">
+          <a class="button button-primary" href="/register.html">Hemen Başlayın</a>
+          <a class="button button-outline" href="/login.html">Hesabınıza Giriş Yapın</a>
         </div>
       </section>
 
-      <section id="dashboard" class="card hidden">
-        <h2>Kontrol Paneli</h2>
-        <p id="dashboard-intro" class="dashboard-intro"></p>
-
-        <div id="provider-panel" class="panel hidden">
-          <div class="panel-section">
-            <h3>Profil Bilgileri</h3>
-            <form id="provider-profile-form" class="form form-grid">
-              <label>
-                Ad
-                <input type="text" name="firstName" required />
-              </label>
-              <label>
-                Soyad
-                <input type="text" name="lastName" required />
-              </label>
-              <label>
-                Meslek Ünvanı
-                <input type="text" name="profession" placeholder="Örn. Boyacı" />
-              </label>
-              <label>
-                Şehir
-                <input type="text" name="city" placeholder="Trabzon" />
-              </label>
-              <label class="full">
-                Hakkımda
-                <textarea name="about" rows="4" placeholder="Hizmetlerinizi anlatın"></textarea>
-              </label>
-              <label>
-                Kategori
-                <input type="text" name="category" placeholder="Örn. Boya" />
-              </label>
-              <label>
-                Telefon
-                <input type="tel" name="phone" placeholder="05xx xxx xx xx" />
-              </label>
-              <label>
-                Web Sitesi
-                <input type="url" name="website" placeholder="https://" />
-              </label>
-              <label class="full">
-                İletişim E-postası
-                <input type="email" name="contactEmail" placeholder="info@ornek.com" />
-              </label>
-              <button type="submit" class="button full">Profili Güncelle</button>
-              <p id="provider-profile-feedback" class="feedback full"></p>
-            </form>
+      <section class="card">
+        <h2>Nasıl Çalışır?</h2>
+        <div class="list">
+          <div class="list-item">
+            <h3>1. Kayıt Olun</h3>
+            <p>Hesap oluştururken rolünüzü seçin: Usta ya da Müşteri.</p>
           </div>
-
-          <div class="panel-section">
-            <h3>Görsel Ayarları</h3>
-            <form id="provider-media-form" class="form">
-              <label>
-                Profil Fotoğrafı
-                <input type="file" id="provider-avatar" accept="image/*" />
-              </label>
-              <label>
-                Banner Görseli
-                <input type="file" id="provider-banner" accept="image/*" />
-              </label>
-              <label>
-                Tamamlanan İş Fotoğrafları
-                <input type="file" id="provider-gallery" accept="image/*" multiple />
-              </label>
-              <button type="submit" class="button">Görselleri Kaydet</button>
-              <p id="provider-media-feedback" class="feedback"></p>
-            </form>
-            <div id="provider-media-preview" class="media-preview"></div>
+          <div class="list-item">
+            <h3>2. Profilinizi Hazırlayın</h3>
+            <p>
+              İletişim bilgilerinizi, profil fotoğrafınızı ve iş portföyünüzü yükleyin.
+              Müşteriler güvenle size ulaşsın.
+            </p>
           </div>
-
-          <div class="panel-section">
-            <h3>Müşteri Yorumları</h3>
-            <div id="provider-reviews" class="list muted"></div>
-          </div>
-
-          <div class="panel-section">
-            <h3>Yeni Talepler</h3>
-            <div id="provider-open-requests" class="list"></div>
-          </div>
-
-          <div class="panel-section">
-            <h3>Gönderdiğim Teklifler</h3>
-            <div id="provider-offers" class="list"></div>
-          </div>
-        </div>
-
-        <div id="customer-panel" class="panel hidden">
-          <div class="panel-section">
-            <h3>Profil Bilgileri</h3>
-            <form id="customer-profile-form" class="form form-grid">
-              <label>
-                Ad
-                <input type="text" name="firstName" required />
-              </label>
-              <label>
-                Soyad
-                <input type="text" name="lastName" required />
-              </label>
-              <label>
-                Şehir
-                <input type="text" name="city" placeholder="Trabzon" />
-              </label>
-              <label>
-                Telefon
-                <input type="tel" name="phone" placeholder="05xx xxx xx xx" />
-              </label>
-              <label>
-                E-posta
-                <input type="email" name="email" required />
-              </label>
-              <label class="full">
-                Profil Fotoğrafı
-                <input type="file" id="customer-avatar" accept="image/*" />
-              </label>
-              <button type="submit" class="button full">Profili Güncelle</button>
-              <p id="customer-profile-feedback" class="feedback full"></p>
-            </form>
-          </div>
-
-          <div class="panel-section">
-            <h3>Hizmet Taleplerim</h3>
-            <form id="customer-request-form" class="form">
-              <label>
-                Kategori
-                <input type="text" name="category" placeholder="Örn. Ev Temizliği" required />
-              </label>
-              <label>
-                Açıklama
-                <textarea name="description" rows="4" placeholder="İhtiyacınızı anlatın" required></textarea>
-              </label>
-              <button type="submit" class="button">Talep Oluştur</button>
-              <p id="customer-request-feedback" class="feedback"></p>
-            </form>
-            <div id="customer-requests" class="list"></div>
+          <div class="list-item">
+            <h3>3. Talepler ve Teklifler</h3>
+            <p>
+              Müşteriler hizmet talepleri oluşturur, ustalar teklif gönderir. Tüm süreç şeffaf
+              biçimde yönetilir.
+            </p>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="footer">
-      <div class="container footer__content">
-        <p>© <span id="year"></span> TrabzonİşBul. Tüm hakları saklıdır.</p>
-        <p>Karadeniz’in enerjisi ile profesyonelleri müşterilerle buluşturuyoruz.</p>
-      </div>
+    <footer>
+      © <span id="year"></span> TrabzonİşBul. Tüm hakları saklıdır.
     </footer>
 
-    <script src="/js/main.js" type="module"></script>
+    <script type="module">
+      document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
   </body>
 </html>

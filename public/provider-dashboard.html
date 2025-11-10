@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usta Paneli | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><button id="logout" class="button secondary" type="button">Çıkış Yap</button></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="dashboard-grid">
+        <div class="card section">
+          <div class="section-header">
+            <h1>Usta Paneli</h1>
+            <span class="badge" id="provider-summary"></span>
+          </div>
+          <p>Profilinizi güncelleyin, galerinizi yönetin ve taleplere teklif verin.</p>
+          <div id="provider-feedback"></div>
+        </div>
+
+        <section class="card section">
+          <h2>Profil Bilgileri</h2>
+          <form id="provider-profile-form">
+            <div class="form-grid">
+              <div>
+                <label for="prov-firstName">Ad</label>
+                <input id="prov-firstName" name="firstName" type="text" required />
+              </div>
+              <div>
+                <label for="prov-lastName">Soyad</label>
+                <input id="prov-lastName" name="lastName" type="text" required />
+              </div>
+              <div>
+                <label for="prov-profession">Uzmanlık</label>
+                <input id="prov-profession" name="profession" type="text" placeholder="Örn. Boya Ustası" />
+              </div>
+              <div>
+                <label for="prov-category">Kategori</label>
+                <input id="prov-category" name="category" type="text" placeholder="Örn. Boya" />
+              </div>
+              <div>
+                <label for="prov-city">Şehir</label>
+                <input id="prov-city" name="city" type="text" placeholder="Trabzon" />
+              </div>
+            </div>
+            <div>
+              <label for="prov-about">Hakkınızda</label>
+              <textarea id="prov-about" name="about" placeholder="Deneyiminiz, sunduğunuz hizmetler ve uzmanlaştığınız alanlar"></textarea>
+            </div>
+            <button class="button button-primary" type="submit">Profili Güncelle</button>
+          </form>
+        </section>
+
+        <section class="card section">
+          <h2>İletişim Bilgileri</h2>
+          <form id="provider-contact-form">
+            <div class="form-grid">
+              <div>
+                <label for="prov-phone">Telefon</label>
+                <input id="prov-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
+              </div>
+              <div>
+                <label for="prov-email">E-posta</label>
+                <input id="prov-email" name="email" type="email" />
+              </div>
+              <div>
+                <label for="prov-website">Web sitesi</label>
+                <input id="prov-website" name="website" type="url" placeholder="https://" />
+              </div>
+            </div>
+            <button class="button button-primary" type="submit">İletişimi Kaydet</button>
+          </form>
+        </section>
+
+        <section class="card section">
+          <h2>Medya Merkezi</h2>
+          <p>Profil fotoğrafı, banner ve tamamladığınız işlerin görsellerini yönetin.</p>
+          <form id="provider-media-form">
+            <div class="form-grid">
+              <div>
+                <label for="prov-avatar">Profil Fotoğrafı</label>
+                <input id="prov-avatar" type="file" accept="image/*" />
+              </div>
+              <div>
+                <label for="prov-banner">Banner</label>
+                <input id="prov-banner" type="file" accept="image/*" />
+              </div>
+              <div>
+                <label for="prov-gallery">Galeri (birden fazla seçin)</label>
+                <input id="prov-gallery" type="file" accept="image/*" multiple />
+              </div>
+            </div>
+            <button class="button button-primary" type="submit">Medya Güncelle</button>
+          </form>
+          <div class="media-preview" id="provider-media-preview"></div>
+        </section>
+
+        <section class="card section">
+          <div class="section-header">
+            <h2>Aktif Talepler</h2>
+            <button class="button secondary" type="button" id="refresh-requests">Yenile</button>
+          </div>
+          <div id="provider-requests" class="list"></div>
+        </section>
+
+        <section class="card section">
+          <div class="section-header">
+            <h2>Tekliflerim</h2>
+            <button class="button secondary" type="button" id="refresh-offers">Yenile</button>
+          </div>
+          <div id="provider-offers" class="list"></div>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/provider-dashboard.js"></script>
+  </body>
+</html>

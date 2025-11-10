@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Giriş Yap | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/register.html">Hesap Oluştur</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <h1>Hesabınıza giriş yapın</h1>
+        <p>TrabzonİşBul deneyiminize kaldığınız yerden devam edin.</p>
+        <form id="login-form">
+          <div class="form-grid">
+            <div>
+              <label for="email">E-posta</label>
+              <input type="email" id="email" name="email" required autocomplete="email" />
+            </div>
+            <div>
+              <label for="password">Şifre</label>
+              <input type="password" id="password" name="password" required autocomplete="current-password" />
+            </div>
+          </div>
+          <button class="button button-primary" type="submit">Giriş Yap</button>
+          <p>
+            Henüz hesabınız yok mu?
+            <a href="/register.html">Hemen kayıt olun.</a>
+          </p>
+          <div id="feedback"></div>
+        </form>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/login.js"></script>
+  </body>
+</html>
