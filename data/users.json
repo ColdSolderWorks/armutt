@@ -1,0 +1,8 @@
+[
+  {
+    "id": "user-1",
+    "name": "Demo Kullanıcı",
+    "email": "demo@trabzonisbul.com",
+    "passwordHash": "$2b$10$neN2YDW6uwNFKDoG73.7P.ZTby8FtMwHEPiOh5U3J8l92N75fFIqi"
+  }
+]

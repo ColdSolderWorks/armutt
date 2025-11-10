@@ -1,0 +1,257 @@
+:root {
+  --primary: #006d77;
+  --secondary: #83c5be;
+  --accent: #ffddd2;
+  --dark: #073b4c;
+  --light: #f9f9f9;
+  --text: #1f2d3d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--light);
+  color: var(--text);
+}
+
+.container {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--primary), var(--dark));
+  color: white;
+  padding: 4rem 0;
+}
+
+.hero__content {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: center;
+}
+
+.hero__content h1 {
+  font-size: 2.75rem;
+  margin-bottom: 1rem;
+}
+
+.hero__content p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.hero__stats {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero__stats div {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  text-align: center;
+  min-width: 180px;
+}
+
+.stat {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.75rem;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--dark);
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-top: 1.5rem;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+main {
+  margin-top: -3rem;
+  display: grid;
+  gap: 2rem;
+  padding-bottom: 4rem;
+}
+
+.card {
+  background: white;
+  border-radius: 1.25rem;
+  padding: 2rem;
+  box-shadow: 0 20px 35px rgba(15, 34, 58, 0.08);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.category-card,
+.provider-card {
+  border: 1px solid #e3ebf6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: white;
+}
+
+.category-card:hover,
+.provider-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 30px rgba(7, 59, 76, 0.12);
+}
+
+.category-card span {
+  display: block;
+  margin-top: 0.75rem;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.provider-card h3 {
+  margin: 0 0 0.5rem 0;
+}
+
+.provider-card p {
+  margin: 0.25rem 0;
+  color: #475569;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.form input,
+.form textarea,
+.form select {
+  border-radius: 0.75rem;
+  border: 1px solid #d0dbe7;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #f8fafc;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form input:focus,
+.form textarea:focus,
+.form select:focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 109, 119, 0.15);
+}
+
+.feedback {
+  font-size: 0.95rem;
+  min-height: 1.4em;
+}
+
+.feedback.success {
+  color: #0a8a5d;
+}
+
+.feedback.error {
+  color: #c81e1e;
+}
+
+.list {
+  display: grid;
+  gap: 1rem;
+}
+
+.list-item {
+  background: #f8fafc;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+}
+
+.list-item h3 {
+  margin: 0 0 0.5rem;
+}
+
+.list-item span {
+  display: block;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.grid-auth {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 2rem;
+}
+
+.form-hint {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.current-user {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: #f0fdfa;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+}
+
+.footer {
+  background: #022b3a;
+  color: #e6f7ff;
+  padding: 2.5rem 0;
+}
+
+.footer__content {
+  display: grid;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .hero__content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .hero__stats {
+    width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrabzonİşBul | Hizmet Profesyonellerini Keşfet</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="container hero__content">
+        <div>
+          <h1>TrabzonİşBul</h1>
+          <p>
+            Trabzon ve çevresinde güvenilir hizmet profesyonelleri ile buluşun. Tek bir
+            form doldurun, teklifler ayağınıza gelsin.
+          </p>
+          <a class="button" href="#request">Talep Oluştur</a>
+        </div>
+        <div class="hero__stats">
+          <div>
+            <span class="stat">450+</span>
+            <span>Hizmet Profesyoneli</span>
+          </div>
+          <div>
+            <span class="stat">25.000+</span>
+            <span>Mutlu Müşteri</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="categories" class="card">
+        <h2>Popüler Kategoriler</h2>
+        <div id="category-list" class="grid"></div>
+      </section>
+
+      <section id="providers" class="card">
+        <div class="section-header">
+          <h2>Öne Çıkan Hizmet Profesyonelleri</h2>
+          <select id="category-filter">
+            <option value="">Tüm Kategoriler</option>
+          </select>
+        </div>
+        <div id="provider-list" class="grid"></div>
+      </section>
+
+      <section id="request" class="card">
+        <h2>Hizmet Talebi Oluştur</h2>
+        <form id="request-form" class="form">
+          <label>
+            Kategori
+            <input type="text" name="category" placeholder="Örn. Ev Temizliği" required />
+          </label>
+          <label>
+            Açıklama
+            <textarea name="description" rows="4" placeholder="İhtiyacınızı anlatın" required></textarea>
+          </label>
+          <label>
+            Kullanıcı ID
+            <input type="text" name="userId" placeholder="Giriş yaptıktan sonra ID" required />
+          </label>
+          <button type="submit" class="button">Talep Gönder</button>
+          <p id="request-feedback" class="feedback"></p>
+        </form>
+      </section>
+
+      <section id="requests" class="card">
+        <h2>Son Hizmet Talepleri</h2>
+        <div id="request-list" class="list"></div>
+      </section>
+
+      <section id="auth" class="card grid-auth">
+        <div>
+          <h2>Kayıt Ol</h2>
+          <form id="register-form" class="form">
+            <label>
+              Ad Soyad
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              E-posta
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Şifre
+              <input type="password" name="password" required />
+            </label>
+            <button type="submit" class="button">Kayıt Ol</button>
+            <p class="form-hint">Demo kullanıcı: demo@trabzonisbul.com / Trabzon123</p>
+            <p id="register-feedback" class="feedback"></p>
+          </form>
+        </div>
+        <div>
+          <h2>Giriş Yap</h2>
+          <form id="login-form" class="form">
+            <label>
+              E-posta
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Şifre
+              <input type="password" name="password" required />
+            </label>
+            <button type="submit" class="button">Giriş Yap</button>
+            <p id="login-feedback" class="feedback"></p>
+            <div id="current-user" class="current-user"></div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer__content">
+        <p>© <span id="year"></span> TrabzonİşBul. Tüm hakları saklıdır.</p>
+        <p>Karadeniz’in enerjisi ile profesyonelleri müşterilerle buluşturuyoruz.</p>
+      </div>
+    </footer>
+
+    <script src="/js/main.js" type="module"></script>
+  </body>
+</html>

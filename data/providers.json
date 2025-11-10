@@ -1,0 +1,29 @@
+[
+  {
+    "id": "prov-1",
+    "name": "Karadeniz Temizlik",
+    "category": "Ev Temizliği",
+    "rating": 4.8,
+    "completedJobs": 128,
+    "about": "Trabzon ve çevresinde profesyonel temizlik hizmeti sunuyoruz.",
+    "location": "Ortahisar"
+  },
+  {
+    "id": "prov-2",
+    "name": "Usta Eli Tadilat",
+    "category": "Tadilat & Dekorasyon",
+    "rating": 4.6,
+    "completedJobs": 86,
+    "about": "Banyo, mutfak ve anahtar teslim tadilat çözümleri.",
+    "location": "Akçaabat"
+  },
+  {
+    "id": "prov-3",
+    "name": "Hamsi Nakliyat",
+    "category": "Nakliye",
+    "rating": 4.9,
+    "completedJobs": 210,
+    "about": "Şehir içi ve şehirler arası güvenilir nakliye.",
+    "location": "Yomra"
+  }
+]

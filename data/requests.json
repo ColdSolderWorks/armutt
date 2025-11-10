@@ -1,0 +1,10 @@
+[
+  {
+    "id": "req-1",
+    "userId": "user-1",
+    "category": "Ev Temizliği",
+    "description": "3+1 ev için detaylı temizlik gerekiyor.",
+    "status": "Teklif Bekleniyor",
+    "createdAt": "2024-01-12T10:30:00.000Z"
+  }
+]
