@@ -1,8 +1,57 @@
 [
   {
-    "id": "user-1",
-    "name": "Demo Kullanıcı",
-    "email": "demo@trabzonisbul.com",
-    "passwordHash": "$2b$10$neN2YDW6uwNFKDoG73.7P.ZTby8FtMwHEPiOh5U3J8l92N75fFIqi"
+    "id": "usta-1",
+    "role": "usta",
+    "email": "usta@trabzonisbul.com",
+    "passwordHash": "$2b$10$Nz8cLB1izXi1ShX1tzdK9epf/lg9JIpz/JDHRHvPktAHXEC7lDBI.",
+    "profile": {
+      "firstName": "Ahmet",
+      "lastName": "Kara",
+      "city": "Ortahisar",
+      "profession": "Boya ve Dekorasyon Ustası",
+      "about": "15 yıllık deneyimle iç ve dış cephe boya, alçı ve dekorasyon işleri yapıyorum.",
+      "category": "Boya",
+      "avatar": "",
+      "banner": "",
+      "gallery": [],
+      "contact": {
+        "phone": "0505 000 00 00",
+        "email": "usta@trabzonisbul.com",
+        "website": ""
+      }
+    },
+    "stats": {
+      "completedJobs": 142
+    },
+    "reviews": [
+      {
+        "id": "rev-1",
+        "customerName": "Selin Y.",
+        "rating": 5,
+        "comment": "Zamanında teslim etti ve çok temiz çalıştı.",
+        "createdAt": "2024-02-05T10:00:00.000Z"
+      },
+      {
+        "id": "rev-2",
+        "customerName": "Murat A.",
+        "rating": 4,
+        "comment": "Titiz ve özenli bir işçilik.",
+        "createdAt": "2024-03-18T14:30:00.000Z"
+      }
+    ]
+  },
+  {
+    "id": "musteri-1",
+    "role": "musteri",
+    "email": "musteri@trabzonisbul.com",
+    "passwordHash": "$2b$10$Nz8cLB1izXi1ShX1tzdK9epf/lg9JIpz/JDHRHvPktAHXEC7lDBI.",
+    "profile": {
+      "firstName": "Selin",
+      "lastName": "Yılmaz",
+      "city": "Yomra",
+      "phone": "0506 111 11 11",
+      "email": "musteri@trabzonisbul.com",
+      "avatar": ""
+    }
   }
 ]

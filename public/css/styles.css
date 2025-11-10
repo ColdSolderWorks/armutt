@@ -150,11 +150,29 @@ main {
   gap: 1rem;
 }
 
+.form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.form-grid .full {
+  grid-column: 1 / -1;
+}
+
 .form label {
   display: grid;
   gap: 0.5rem;
   font-weight: 600;
   color: #1f2d3d;
+}
+
+.role-field {
+  display: none;
+}
+
+.role-field.active {
+  display: grid;
 }
 
 .form input,
@@ -190,6 +208,53 @@ main {
   color: #c81e1e;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.panel {
+  display: grid;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.panel-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.panel-section h3 {
+  margin: 0;
+}
+
+.dashboard-intro {
+  color: #475569;
+  margin-bottom: 1.5rem;
+}
+
+.media-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.media-preview img {
+  width: 100%;
+  border-radius: 1rem;
+  height: 120px;
+  object-fit: cover;
+  border: 1px solid #d4d4d8;
+}
+
+.muted .list-item,
+.muted p {
+  color: #475569;
+}
+
 .list {
   display: grid;
   gap: 1rem;
@@ -210,6 +275,40 @@ main {
   display: block;
   color: #64748b;
   margin-bottom: 0.5rem;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--dark);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.offer-form,
+.offer-accept-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.offer-form .inline,
+.offer-accept-form .inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.offer-form button,
+.offer-accept-form button {
+  justify-self: flex-start;
 }
 
 .grid-auth {

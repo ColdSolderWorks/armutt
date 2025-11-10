@@ -1,10 +1,30 @@
 [
   {
     "id": "req-1",
-    "userId": "user-1",
+    "userId": "musteri-1",
     "category": "Ev Temizliği",
-    "description": "3+1 ev için detaylı temizlik gerekiyor.",
+    "description": "3+1 ev için detaylı temizlik ve cam silme hizmeti talep ediyorum.",
     "status": "Teklif Bekleniyor",
-    "createdAt": "2024-01-12T10:30:00.000Z"
+    "createdAt": "2024-04-10T09:15:00.000Z",
+    "offers": []
+  },
+  {
+    "id": "req-2",
+    "userId": "musteri-1",
+    "category": "Boya",
+    "description": "Salon ve çocuk odası için renk değişimi yapılacak. Malzeme dahil fiyat istiyorum.",
+    "status": "Teklif Kabul Edildi",
+    "createdAt": "2024-03-02T12:45:00.000Z",
+    "offers": [
+      {
+        "id": "offer-1",
+        "providerId": "usta-1",
+        "message": "İki günde teslim ederim, boya ve malzemeler fiyata dahildir.",
+        "price": "4200",
+        "status": "Kabul Edildi",
+        "createdAt": "2024-03-02T15:10:00.000Z"
+      }
+    ],
+    "acceptedOfferId": "offer-1"
   }
 ]

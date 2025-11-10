@@ -12,10 +12,10 @@
         <div>
           <h1>TrabzonİşBul</h1>
           <p>
-            Trabzon ve çevresinde güvenilir hizmet profesyonelleri ile buluşun. Tek bir
-            form doldurun, teklifler ayağınıza gelsin.
+            Trabzon ve çevresinde güvenilir hizmet profesyonelleri ile buluşun. Tek form ile ihtiyaçlarınızı belirtin,
+            teklifler kapınıza gelsin.
           </p>
-          <a class="button" href="#request">Talep Oluştur</a>
+          <a class="button" href="#auth">Hemen Başlayın</a>
         </div>
         <div class="hero__stats">
           <div>
@@ -46,26 +46,6 @@
         <div id="provider-list" class="grid"></div>
       </section>
 
-      <section id="request" class="card">
-        <h2>Hizmet Talebi Oluştur</h2>
-        <form id="request-form" class="form">
-          <label>
-            Kategori
-            <input type="text" name="category" placeholder="Örn. Ev Temizliği" required />
-          </label>
-          <label>
-            Açıklama
-            <textarea name="description" rows="4" placeholder="İhtiyacınızı anlatın" required></textarea>
-          </label>
-          <label>
-            Kullanıcı ID
-            <input type="text" name="userId" placeholder="Giriş yaptıktan sonra ID" required />
-          </label>
-          <button type="submit" class="button">Talep Gönder</button>
-          <p id="request-feedback" class="feedback"></p>
-        </form>
-      </section>
-
       <section id="requests" class="card">
         <h2>Son Hizmet Talepleri</h2>
         <div id="request-list" class="list"></div>
@@ -76,8 +56,29 @@
           <h2>Kayıt Ol</h2>
           <form id="register-form" class="form">
             <label>
-              Ad Soyad
-              <input type="text" name="name" required />
+              Rol
+              <select name="role" id="register-role" required>
+                <option value="musteri">Müşteri</option>
+                <option value="usta">Usta</option>
+              </select>
+            </label>
+            <div class="form-grid">
+              <label>
+                Ad
+                <input type="text" name="firstName" required />
+              </label>
+              <label>
+                Soyad
+                <input type="text" name="lastName" required />
+              </label>
+            </div>
+            <label class="role-field" data-role="usta">
+              Meslek Ünvanı
+              <input type="text" name="profession" placeholder="Örn. Boyacı Ustası" />
+            </label>
+            <label>
+              Şehir
+              <input type="text" name="city" placeholder="Trabzon" />
             </label>
             <label>
               E-posta
@@ -88,7 +89,8 @@
               <input type="password" name="password" required />
             </label>
             <button type="submit" class="button">Kayıt Ol</button>
-            <p class="form-hint">Demo kullanıcı: demo@trabzonisbul.com / Trabzon123</p>
+            <p class="form-hint">Demo müşteri: musteri@trabzonisbul.com / Trabzon123</p>
+            <p class="form-hint">Demo usta: usta@trabzonisbul.com / Trabzon123</p>
             <p id="register-feedback" class="feedback"></p>
           </form>
         </div>
@@ -107,6 +109,144 @@
             <p id="login-feedback" class="feedback"></p>
             <div id="current-user" class="current-user"></div>
           </form>
+        </div>
+      </section>
+
+      <section id="dashboard" class="card hidden">
+        <h2>Kontrol Paneli</h2>
+        <p id="dashboard-intro" class="dashboard-intro"></p>
+
+        <div id="provider-panel" class="panel hidden">
+          <div class="panel-section">
+            <h3>Profil Bilgileri</h3>
+            <form id="provider-profile-form" class="form form-grid">
+              <label>
+                Ad
+                <input type="text" name="firstName" required />
+              </label>
+              <label>
+                Soyad
+                <input type="text" name="lastName" required />
+              </label>
+              <label>
+                Meslek Ünvanı
+                <input type="text" name="profession" placeholder="Örn. Boyacı" />
+              </label>
+              <label>
+                Şehir
+                <input type="text" name="city" placeholder="Trabzon" />
+              </label>
+              <label class="full">
+                Hakkımda
+                <textarea name="about" rows="4" placeholder="Hizmetlerinizi anlatın"></textarea>
+              </label>
+              <label>
+                Kategori
+                <input type="text" name="category" placeholder="Örn. Boya" />
+              </label>
+              <label>
+                Telefon
+                <input type="tel" name="phone" placeholder="05xx xxx xx xx" />
+              </label>
+              <label>
+                Web Sitesi
+                <input type="url" name="website" placeholder="https://" />
+              </label>
+              <label class="full">
+                İletişim E-postası
+                <input type="email" name="contactEmail" placeholder="info@ornek.com" />
+              </label>
+              <button type="submit" class="button full">Profili Güncelle</button>
+              <p id="provider-profile-feedback" class="feedback full"></p>
+            </form>
+          </div>
+
+          <div class="panel-section">
+            <h3>Görsel Ayarları</h3>
+            <form id="provider-media-form" class="form">
+              <label>
+                Profil Fotoğrafı
+                <input type="file" id="provider-avatar" accept="image/*" />
+              </label>
+              <label>
+                Banner Görseli
+                <input type="file" id="provider-banner" accept="image/*" />
+              </label>
+              <label>
+                Tamamlanan İş Fotoğrafları
+                <input type="file" id="provider-gallery" accept="image/*" multiple />
+              </label>
+              <button type="submit" class="button">Görselleri Kaydet</button>
+              <p id="provider-media-feedback" class="feedback"></p>
+            </form>
+            <div id="provider-media-preview" class="media-preview"></div>
+          </div>
+
+          <div class="panel-section">
+            <h3>Müşteri Yorumları</h3>
+            <div id="provider-reviews" class="list muted"></div>
+          </div>
+
+          <div class="panel-section">
+            <h3>Yeni Talepler</h3>
+            <div id="provider-open-requests" class="list"></div>
+          </div>
+
+          <div class="panel-section">
+            <h3>Gönderdiğim Teklifler</h3>
+            <div id="provider-offers" class="list"></div>
+          </div>
+        </div>
+
+        <div id="customer-panel" class="panel hidden">
+          <div class="panel-section">
+            <h3>Profil Bilgileri</h3>
+            <form id="customer-profile-form" class="form form-grid">
+              <label>
+                Ad
+                <input type="text" name="firstName" required />
+              </label>
+              <label>
+                Soyad
+                <input type="text" name="lastName" required />
+              </label>
+              <label>
+                Şehir
+                <input type="text" name="city" placeholder="Trabzon" />
+              </label>
+              <label>
+                Telefon
+                <input type="tel" name="phone" placeholder="05xx xxx xx xx" />
+              </label>
+              <label>
+                E-posta
+                <input type="email" name="email" required />
+              </label>
+              <label class="full">
+                Profil Fotoğrafı
+                <input type="file" id="customer-avatar" accept="image/*" />
+              </label>
+              <button type="submit" class="button full">Profili Güncelle</button>
+              <p id="customer-profile-feedback" class="feedback full"></p>
+            </form>
+          </div>
+
+          <div class="panel-section">
+            <h3>Hizmet Taleplerim</h3>
+            <form id="customer-request-form" class="form">
+              <label>
+                Kategori
+                <input type="text" name="category" placeholder="Örn. Ev Temizliği" required />
+              </label>
+              <label>
+                Açıklama
+                <textarea name="description" rows="4" placeholder="İhtiyacınızı anlatın" required></textarea>
+              </label>
+              <button type="submit" class="button">Talep Oluştur</button>
+              <p id="customer-request-feedback" class="feedback"></p>
+            </form>
+            <div id="customer-requests" class="list"></div>
+          </div>
         </div>
       </section>
     </main>
