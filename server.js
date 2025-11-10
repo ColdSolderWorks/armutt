@@ -86,14 +86,41 @@ function updateProviderStats(users, providerId, feedback) {
   }
 }
 
+function matchesQuery(value = '', query = '') {
+  if (!query) {
+    return true;
+  }
+  const normalizedValue = value.toString().toLowerCase();
+  const normalizedQuery = query.toString().toLowerCase();
+  return normalizedValue.includes(normalizedQuery);
+}
+
 app.get('/api/providers', async (req, res) => {
   try {
     const users = await getUsers();
-    const { category } = req.query;
+    const { category, q } = req.query;
     const providers = users
       .filter((user) => user.role === 'usta')
       .map(buildProviderSummary)
-      .filter((provider) => !category || provider.category === category);
+      .filter((provider) => {
+        const categoryMatch = !category || provider.category === category;
+        if (!categoryMatch) {
+          return false;
+        }
+        if (!q) {
+          return true;
+        }
+        const haystack = [
+          provider.fullName,
+          provider.profession,
+          provider.category,
+          provider.city,
+          provider.about,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return matchesQuery(haystack, q);
+      });
 
     res.json(providers);
   } catch (error) {
@@ -217,10 +244,40 @@ app.put('/api/customers/:id', async (req, res) => {
   }
 });
 
+function mapOffersWithProvider(offers = [], users = []) {
+  return offers.map((offer) => {
+    const provider = users.find((candidate) => candidate.id === offer.providerId && candidate.role === 'usta');
+    const providerSummary = provider ? buildProviderSummary(provider) : null;
+    return {
+      ...offer,
+      provider: providerSummary
+        ? {
+            id: providerSummary.id,
+            fullName: providerSummary.fullName,
+            profession: providerSummary.profession,
+            city: providerSummary.city,
+            avatar: providerSummary.avatar,
+            contact: providerSummary.contact,
+          }
+        : {
+            id: offer.providerId,
+            fullName: offer.providerName || 'Usta',
+          },
+    };
+  });
+}
+
+function mapRequestsWithProviders(requests = [], users = []) {
+  return requests.map((request) => ({
+    ...request,
+    offers: mapOffersWithProvider(request.offers || [], users),
+  }));
+}
+
 app.get('/api/requests', async (_req, res) => {
   try {
-    const requests = await readJson(REQUESTS_FILE);
-    res.json(requests);
+    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
+    res.json(mapRequestsWithProviders(requests, users));
   } catch (error) {
     res.status(500).json({ message: 'Talepler yüklenemedi.' });
   }
@@ -228,9 +285,9 @@ app.get('/api/requests', async (_req, res) => {
 
 app.get('/api/requests/customer/:customerId', async (req, res) => {
   try {
-    const requests = await readJson(REQUESTS_FILE);
+    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
     const filtered = requests.filter((request) => request.userId === req.params.customerId);
-    res.json(filtered);
+    res.json(mapRequestsWithProviders(filtered, users));
   } catch (error) {
     res.status(500).json({ message: 'Müşteri talepleri yüklenemedi.' });
   }
@@ -238,14 +295,14 @@ app.get('/api/requests/customer/:customerId', async (req, res) => {
 
 app.get('/api/requests/provider/:providerId', async (req, res) => {
   try {
-    const requests = await readJson(REQUESTS_FILE);
+    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
     const filtered = requests.filter((request) => {
       if (!Array.isArray(request.offers)) {
         return false;
       }
       return request.offers.some((offer) => offer.providerId === req.params.providerId);
     });
-    res.json(filtered);
+    res.json(mapRequestsWithProviders(filtered, users));
   } catch (error) {
     res.status(500).json({ message: 'Usta teklifleri yüklenemedi.' });
   }
@@ -305,9 +362,12 @@ app.post('/api/requests/:requestId/offers', async (req, res) => {
     }
 
     request.offers = request.offers || [];
+    const providerSummary = buildProviderSummary(provider);
     const offer = {
       id: uuid(),
       providerId,
+      providerName: providerSummary.fullName,
+      providerProfession: providerSummary.profession,
       message,
       price,
       status: 'Beklemede',
@@ -381,7 +441,7 @@ app.post('/api/requests/:requestId/offers/:offerId/accept', async (req, res) => 
 });
 
 app.post('/api/auth/register', async (req, res) => {
-  const { firstName, lastName, email, password, role, profession, city } = req.body;
+  const { firstName, lastName, email, password, role, profession, city, category } = req.body;
 
   if (!firstName || !lastName || !email || !password || !role) {
     return res.status(400).json({ message: 'Lütfen tüm alanları doldurun.' });
@@ -418,7 +478,7 @@ app.post('/api/auth/register', async (req, res) => {
           ? {
               profession: profession || '',
               about: '',
-              category: '',
+              category: category || '',
               banner: '',
               gallery: [],
               contact: {

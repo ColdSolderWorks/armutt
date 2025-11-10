@@ -12,6 +12,7 @@
         <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
         <nav>
           <ul>
+            <li><a href="/providers.html">Ustalar</a></li>
             <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
             <li><button id="logout" class="button secondary" type="button">Çıkış Yap</button></li>
           </ul>
@@ -19,74 +20,93 @@
       </div>
     </header>
 
-    <main>
-      <section class="dashboard-grid">
-        <div class="card section">
-          <div class="section-header">
-            <h1>Müşteri Paneli</h1>
-            <span class="badge" id="customer-summary"></span>
+    <main class="profile profile-dashboard">
+      <section class="profile-hero editable">
+        <div class="profile-banner" id="customer-banner-display"></div>
+        <div class="profile-header">
+          <div class="profile-avatar" id="customer-avatar-display"></div>
+          <div>
+            <h1 id="customer-name-display">Müşteri Paneli</h1>
+            <p id="customer-city-display">Şehrinizi ve iletişim bilgilerinizi güncelleyin.</p>
+            <div class="profile-meta" id="customer-meta-display"></div>
           </div>
-          <p>Taleplerinizi oluşturun, gelen teklifleri görüntüleyin ve uygun ustaları seçin.</p>
-          <div id="customer-feedback"></div>
+        </div>
+      </section>
+
+      <section class="profile-feedback" id="customer-feedback"></section>
+
+      <section class="profile-content">
+        <div class="profile-main">
+          <article class="card profile-section">
+            <h2>Profil Bilgileri</h2>
+            <form id="customer-profile-form" class="stacked-form">
+              <div class="form-grid">
+                <div>
+                  <label for="cust-firstName">Ad</label>
+                  <input id="cust-firstName" name="firstName" type="text" required />
+                </div>
+                <div>
+                  <label for="cust-lastName">Soyad</label>
+                  <input id="cust-lastName" name="lastName" type="text" required />
+                </div>
+                <div>
+                  <label for="cust-city">Şehir</label>
+                  <input id="cust-city" name="city" type="text" placeholder="Trabzon" />
+                </div>
+                <div>
+                  <label for="cust-email">E-posta</label>
+                  <input id="cust-email" name="email" type="email" required />
+                </div>
+                <div>
+                  <label for="cust-phone">Telefon</label>
+                  <input id="cust-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
+                </div>
+              </div>
+              <div>
+                <label for="cust-avatar">Profil Fotoğrafı</label>
+                <input id="cust-avatar" type="file" accept="image/*" />
+              </div>
+              <button class="button button-primary" type="submit">Profili Güncelle</button>
+            </form>
+          </article>
+
+          <article class="card profile-section">
+            <h2>Yeni Talep Oluştur</h2>
+            <form id="request-form" class="stacked-form">
+              <div class="form-grid">
+                <div>
+                  <label for="req-category">Kategori</label>
+                  <input id="req-category" name="category" type="text" placeholder="Örn. Nakliye" required />
+                </div>
+                <div>
+                  <label for="req-description">Talep Detayı</label>
+                  <textarea id="req-description" name="description" placeholder="İhtiyacınızı detaylandırın" required></textarea>
+                </div>
+              </div>
+              <button class="button button-primary" type="submit">Talep Gönder</button>
+            </form>
+          </article>
+
+          <article class="card profile-section">
+            <div class="section-header">
+              <h2>Taleplerim</h2>
+              <button class="button secondary" type="button" id="refresh-requests">Yenile</button>
+            </div>
+            <div id="customer-requests" class="list"></div>
+          </article>
         </div>
 
-        <section class="card section">
-          <h2>Profil Bilgileri</h2>
-          <form id="customer-profile-form">
-            <div class="form-grid">
-              <div>
-                <label for="cust-firstName">Ad</label>
-                <input id="cust-firstName" name="firstName" type="text" required />
-              </div>
-              <div>
-                <label for="cust-lastName">Soyad</label>
-                <input id="cust-lastName" name="lastName" type="text" required />
-              </div>
-              <div>
-                <label for="cust-city">Şehir</label>
-                <input id="cust-city" name="city" type="text" placeholder="Trabzon" />
-              </div>
-              <div>
-                <label for="cust-email">E-posta</label>
-                <input id="cust-email" name="email" type="email" required />
-              </div>
-              <div>
-                <label for="cust-phone">Telefon</label>
-                <input id="cust-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
-              </div>
-            </div>
-            <div>
-              <label for="cust-avatar">Profil Fotoğrafı</label>
-              <input id="cust-avatar" type="file" accept="image/*" />
-            </div>
-            <button class="button button-primary" type="submit">Profili Güncelle</button>
-          </form>
-        </section>
+        <aside class="profile-sidebar">
+          <article class="card profile-section">
+            <h2>Profil Özeti</h2>
+            <ul class="stat-list" id="customer-stats"></ul>
+          </article>
 
-        <section class="card section">
-          <h2>Yeni Talep Oluştur</h2>
-          <form id="request-form">
-            <div class="form-grid">
-              <div>
-                <label for="req-category">Kategori</label>
-                <input id="req-category" name="category" type="text" placeholder="Örn. Nakliye" required />
-              </div>
-              <div>
-                <label for="req-description">Talep Detayı</label>
-                <textarea id="req-description" name="description" placeholder="İhtiyacınızı detaylandırın" required></textarea>
-              </div>
-            </div>
-            <button class="button button-primary" type="submit">Talep Gönder</button>
-          </form>
-        </section>
-
-        <section class="card section">
-          <div class="section-header">
-            <h2>Taleplerim</h2>
-            <button class="button secondary" type="button" id="refresh-requests">Yenile</button>
-          </div>
-          <div id="customer-requests" class="list"></div>
-        </section>
+          <article class="card profile-section">
+            <h2>Son Teklifler</h2>
+            <div id="customer-latest-offers" class="list"></div>
+          </article>
+        </aside>
       </section>
     </main>
 

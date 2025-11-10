@@ -4,11 +4,13 @@ TrabzonİşBul, Armut benzeri bir hizmet pazaryerini yalnızca Node.js kullanara
 
 ## Özellikler
 
-- Express tabanlı REST API ve her özellik için ayrı hazırlanmış statik sayfalar (ana sayfa, giriş, kayıt, müşteri paneli, usta paneli)
+- Express tabanlı REST API ve çok sayfalı statik arayüz (ana sayfa, giriş, kayıt, müşteri ve usta panelleri, usta dizini, usta profili)
+- Ana sayfada kayıtlı ustaların canlı listesi, anlık arama, öne çıkan istatistikler ve animasyonlu görseller
+- `Ustalar` sayfasında kategori filtresi ve arama desteğiyle Facebook benzeri profil kartları
 - Rol seçimiyle kayıt ve `bcrypt` korumalı kimlik doğrulama uçları
-- Usta panelinde profil, iletişim, medya (profil, banner, galeri) yönetimi ve taleplere teklif gönderme
-- Müşteri panelinde profil güncelleme, yeni hizmet talebi açma ve gelen teklifleri puanlayarak kabul etme
-- Talep-teklif akışının JSON dosyaları üzerinde saklanması; kabul edilen teklifler usta istatistiklerini günceller
+- Usta panelinde kapak/başlık alanı, profil fotoğrafı, iletişim, medya (profil, banner, galeri) yönetimi ve taleplere teklif gönderme
+- Müşteri panelinde Facebook profiline benzer görünüm, profil güncelleme, yeni hizmet talebi açma ve gelen teklifleri puanlayarak kabul etme
+- Talep-teklif akışının JSON dosyaları üzerinde saklanması; kabul edilen teklifler usta istatistiklerini günceller ve yorumları günceller
 
 ## Kurulum
 
@@ -38,7 +40,7 @@ Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. S
 
 ### Usta (Service Provider)
 
-- `GET /api/providers` — tüm ustalar veya `?category=` filtresiyle listeleme
+- `GET /api/providers` — tüm ustalar; `?category=` ve `?q=` parametreleriyle filtreleme ve arama
 - `GET /api/providers/:id` — belirli usta profilini, görselleri ve yorumları alma
 - `PUT /api/providers/:id` — usta profilini, iletişim bilgilerini ve medya içeriklerini güncelleme
 

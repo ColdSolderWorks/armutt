@@ -8,6 +8,7 @@ import {
   formatDate,
   createStatusPill,
 } from './common.js';
+import { initialsFromName } from './ui.js';
 
 const session = ensureRole('musteri');
 if (!session) {
@@ -15,23 +16,51 @@ if (!session) {
 }
 
 const feedback = document.getElementById('customer-feedback');
-const summaryBadge = document.getElementById('customer-summary');
 const profileForm = document.getElementById('customer-profile-form');
 const requestForm = document.getElementById('request-form');
 const requestsContainer = document.getElementById('customer-requests');
 const refreshRequestsButton = document.getElementById('refresh-requests');
+const heroName = document.getElementById('customer-name-display');
+const heroCity = document.getElementById('customer-city-display');
+const heroMeta = document.getElementById('customer-meta-display');
+const heroAvatar = document.getElementById('customer-avatar-display');
+const statsList = document.getElementById('customer-stats');
+const latestOffersContainer = document.getElementById('customer-latest-offers');
 
 attachLogout(document.getElementById('logout'));
 
 document.title = `Müşteri Paneli | ${session.profile?.firstName || 'TrabzonİşBul'}`;
 
 let customerData = null;
+let customerRequests = [];
 
-function renderSummary() {
-  if (!summaryBadge || !customerData) return;
+function renderHero() {
+  if (!customerData) return;
   const profile = customerData.profile || {};
-  const parts = [profile.city, profile.email].filter(Boolean);
-  summaryBadge.textContent = parts.join(' · ') || 'Profilinizi güncelleyin';
+  if (heroName) {
+    const fullName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
+    heroName.textContent = fullName || 'Müşteri Paneli';
+  }
+  if (heroCity) {
+    heroCity.textContent = profile.city || 'Şehrinizi ve iletişim bilgilerinizi güncelleyin.';
+  }
+  if (heroMeta) {
+    const metaParts = [profile.email || customerData.email, profile.phone]
+      .filter(Boolean)
+      .map((part) => `<span>${part}</span>`);
+    heroMeta.innerHTML = metaParts.join('<span class="dot"></span>');
+  }
+  if (heroAvatar) {
+    heroAvatar.textContent = '';
+    heroAvatar.style.backgroundImage = '';
+    if (profile.avatar) {
+      heroAvatar.style.backgroundImage = `url('${profile.avatar}')`;
+      heroAvatar.dataset.hasImage = 'true';
+    } else {
+      heroAvatar.textContent = initialsFromName(`${profile.firstName || ''} ${profile.lastName || ''}` || 'Müşteri');
+      delete heroAvatar.dataset.hasImage;
+    }
+  }
 }
 
 function populateProfileForm() {
@@ -47,7 +76,7 @@ function populateProfileForm() {
 async function loadCustomer() {
   try {
     customerData = await apiRequest(`/api/customers/${session.id}`);
-    renderSummary();
+    renderHero();
     populateProfileForm();
   } catch (error) {
     renderAlert(feedback, 'error', error.message);
@@ -112,8 +141,10 @@ requestForm?.addEventListener('submit', async (event) => {
 
 async function fetchCustomerRequests() {
   try {
-    const requests = await apiRequest(`/api/requests/customer/${session.id}`);
-    renderRequests(requests);
+    customerRequests = await apiRequest(`/api/requests/customer/${session.id}`);
+    renderRequests(customerRequests);
+    renderStats();
+    renderLatestOffers();
   } catch (error) {
     renderAlert(feedback, 'error', error.message);
   }
@@ -156,8 +187,17 @@ function renderRequests(requests = []) {
       offers.forEach((offer) => {
         const offerCard = document.createElement('div');
         offerCard.className = 'card';
+        const provider = offer.provider || {};
+        const providerName = provider.fullName || offer.providerName || 'Usta';
+        const providerProfession = provider.profession || offer.providerProfession || '';
         offerCard.innerHTML = `
-          <p><strong>Usta:</strong> ${offer.providerId}</p>
+          <header class="offer-header">
+            <div>
+              <strong>${providerName}</strong>
+              <span>${providerProfession}</span>
+            </div>
+            <div>${createStatusPill(offer.status)}</div>
+          </header>
           <p><strong>Fiyat:</strong> ${offer.price} ₺</p>
           <p>${offer.message}</p>
           <small>${formatDate(offer.createdAt)}</small>
@@ -215,6 +255,63 @@ function renderRequests(requests = []) {
     }
 
     requestsContainer.appendChild(item);
+  });
+}
+
+function renderStats() {
+  if (!statsList) return;
+  statsList.innerHTML = '';
+  const totalRequests = customerRequests.length;
+  const acceptedRequests = customerRequests.filter((request) => request.status === 'Teklif Kabul Edildi').length;
+  const offersWaiting = customerRequests.filter(
+    (request) => request.status !== 'Teklif Kabul Edildi' && (request.offers || []).length > 0,
+  ).length;
+
+  const stats = [
+    { label: 'Toplam talep', value: totalRequests },
+    { label: 'Kabul edilen teklifler', value: acceptedRequests },
+    { label: 'Yanıt bekleyen teklifler', value: offersWaiting },
+  ];
+
+  stats.forEach((stat) => {
+    const item = document.createElement('li');
+    item.innerHTML = `<strong>${stat.value}</strong><span>${stat.label}</span>`;
+    statsList.appendChild(item);
+  });
+}
+
+function renderLatestOffers() {
+  if (!latestOffersContainer) return;
+  latestOffersContainer.innerHTML = '';
+  const offers = customerRequests
+    .flatMap((request) =>
+      (request.offers || []).map((offer) => ({
+        offer,
+        request,
+      })),
+    )
+    .sort((a, b) => new Date(b.offer.createdAt) - new Date(a.offer.createdAt))
+    .slice(0, 3);
+
+  if (!offers.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'Henüz bir teklif almadınız.';
+    latestOffersContainer.appendChild(empty);
+    return;
+  }
+
+  offers.forEach(({ offer, request }) => {
+    const provider = offer.provider || {};
+    const providerName = provider.fullName || offer.providerName || 'Usta';
+    const card = document.createElement('div');
+    card.className = 'list-item';
+    card.innerHTML = `
+      <strong>${providerName}</strong>
+      <p>${request.category} · ${offer.price} ₺</p>
+      <small>${formatDate(offer.createdAt)} · ${createStatusPill(offer.status)}</small>
+    `;
+    latestOffersContainer.appendChild(card);
   });
 }
 

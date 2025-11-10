@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usta Profili | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/login.html">Giriş Yap</a></li>
+            <li><a href="/providers.html">Ustalar</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+            <li><a href="/register.html" class="pill-link">Kayıt Ol</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="profile">
+      <section class="profile-hero">
+        <div class="profile-banner" id="profile-banner"></div>
+        <div class="profile-header">
+          <div class="profile-avatar" id="profile-avatar"></div>
+          <div>
+            <h1 id="profile-name">Usta Profili</h1>
+            <p id="profile-profession"></p>
+            <div class="profile-meta" id="profile-meta"></div>
+          </div>
+          <div class="profile-actions">
+            <a href="#contact" class="button button-primary">İletişime Geç</a>
+            <a href="/login.html" class="button button-outline">Teklif İste</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-content">
+        <div class="profile-main">
+          <article class="card profile-section">
+            <h2>Hakkında</h2>
+            <p id="profile-about">Usta açıklaması yükleniyor...</p>
+          </article>
+
+          <article class="card profile-section" id="gallery-section" hidden>
+            <div class="section-header">
+              <h2>Galeri</h2>
+            </div>
+            <div class="gallery-grid" id="profile-gallery"></div>
+          </article>
+
+          <article class="card profile-section" id="reviews-section" hidden>
+            <div class="section-header">
+              <h2>Müşteri yorumları</h2>
+              <span class="badge" id="profile-rating"></span>
+            </div>
+            <div class="reviews" id="profile-reviews"></div>
+          </article>
+        </div>
+
+        <aside class="profile-sidebar">
+          <article class="card profile-section" id="contact">
+            <h2>İletişim Bilgileri</h2>
+            <ul class="contact-list" id="profile-contact"></ul>
+          </article>
+
+          <article class="card profile-section">
+            <h2>Uzmanlık Alanları</h2>
+            <ul class="tag-list" id="profile-tags"></ul>
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/provider-profile.js"></script>
+  </body>
+</html>

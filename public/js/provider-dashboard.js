@@ -10,6 +10,7 @@ import {
   formatDate,
   createStatusPill,
 } from './common.js';
+import { initialsFromName } from './ui.js';
 
 const session = ensureRole('usta');
 if (!session) {
@@ -26,6 +27,12 @@ const requestsContainer = document.getElementById('provider-requests');
 const offersContainer = document.getElementById('provider-offers');
 const refreshRequestsButton = document.getElementById('refresh-requests');
 const refreshOffersButton = document.getElementById('refresh-offers');
+const heroName = document.getElementById('provider-name-display');
+const heroProfession = document.getElementById('provider-profession-display');
+const heroMeta = document.getElementById('provider-meta-display');
+const heroAvatar = document.getElementById('provider-avatar-display');
+const heroBanner = document.getElementById('provider-banner-display');
+const statsList = document.getElementById('provider-stats');
 
 attachLogout(document.getElementById('logout'));
 
@@ -33,19 +40,78 @@ document.title = `Usta Paneli | ${session.profile?.firstName || 'TrabzonİşBul'
 
 let providerData = null;
 
+function renderHero() {
+  if (!providerData) return;
+  if (heroName) {
+    heroName.textContent = providerData.fullName || 'Usta Paneli';
+  }
+  if (heroProfession) {
+    heroProfession.textContent =
+      providerData.profession || providerData.category || 'Uzmanlık bilgilerinizi güncelleyin.';
+  }
+  if (heroMeta) {
+    const metaParts = [providerData.city, providerData.contact?.phone, providerData.contact?.email].filter(Boolean);
+    heroMeta.innerHTML = metaParts
+      .map((part) => `<span>${part}</span>`)
+      .join('<span class="dot"></span>');
+  }
+  if (heroAvatar) {
+    heroAvatar.textContent = '';
+    heroAvatar.style.backgroundImage = '';
+    if (providerData.avatar) {
+      heroAvatar.style.backgroundImage = `url('${providerData.avatar}')`;
+      heroAvatar.dataset.hasImage = 'true';
+    } else {
+      heroAvatar.textContent = initialsFromName(providerData.fullName || 'TrabzonİşBul');
+      delete heroAvatar.dataset.hasImage;
+    }
+  }
+  if (heroBanner) {
+    heroBanner.style.removeProperty('--banner-image');
+    if (providerData.banner) {
+      heroBanner.style.setProperty('--banner-image', `url('${providerData.banner}')`);
+      heroBanner.dataset.hasImage = 'true';
+    } else {
+      delete heroBanner.dataset.hasImage;
+    }
+  }
+  if (statsList) {
+    statsList.innerHTML = '';
+    const stats = [
+      { label: 'Tamamlanan iş', value: providerData.completedJobs || 0 },
+      {
+        label: 'Puan ortalaması',
+        value:
+          providerData.rating && providerData.rating > 0
+            ? `${providerData.rating} (${providerData.reviewCount})`
+            : 'Değerlendirme bekleniyor',
+      },
+      { label: 'Kategori', value: providerData.category || 'Belirtilmedi' },
+    ];
+    stats.forEach((stat) => {
+      const item = document.createElement('li');
+      item.innerHTML = `<strong>${stat.value}</strong><span>${stat.label}</span>`;
+      statsList.appendChild(item);
+    });
+  }
+}
+
 function renderSummary() {
-  if (!summaryBadge || !providerData) return;
-  const badgeParts = [];
-  if (providerData.rating && providerData.rating > 0) {
-    badgeParts.push(`⭐ ${providerData.rating} (${providerData.reviewCount})`);
+  if (!providerData) return;
+  if (summaryBadge) {
+    const badgeParts = [];
+    if (providerData.rating && providerData.rating > 0) {
+      badgeParts.push(`⭐ ${providerData.rating} (${providerData.reviewCount})`);
+    }
+    if (providerData.category) {
+      badgeParts.push(providerData.category);
+    }
+    if (providerData.city) {
+      badgeParts.push(providerData.city);
+    }
+    summaryBadge.textContent = badgeParts.join(' · ') || 'Profilinizi tamamlayın';
   }
-  if (providerData.category) {
-    badgeParts.push(providerData.category);
-  }
-  if (providerData.city) {
-    badgeParts.push(providerData.city);
-  }
-  summaryBadge.textContent = badgeParts.join(' · ') || 'Profilinizi tamamlayın';
+  renderHero();
 }
 
 function populateProfileForm() {
