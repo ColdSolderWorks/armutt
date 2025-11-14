@@ -13,6 +13,9 @@ TrabzonİşBul, Armut benzeri bir hizmet pazaryerini yalnızca Node.js kullanara
 - Galerideki tüm görseller için ışık kutusu (lightbox) ile tam ekran ön izleme ve animasyonlarla zenginleştirilmiş arayüz
 - Müşteri panelinde Facebook profiline benzer görünüm, profil güncelleme, yeni hizmet talebi açma ve gelen teklifleri puanlayarak kabul etme
 - Talep-teklif akışının JSON dosyaları üzerinde saklanması; kabul edilen teklifler usta istatistiklerini günceller ve yorumları günceller
+- Trabzon, Gümüşhane ve Rize illeri için bağımlı il/ilçe seçicileri; tüm panellerde ve kayıt ekranında konum yönetimi
+- Geniş küfür ve argo filtre listesiyle talepler, teklifler ve yorumlar için ön moderasyon
+- Gizli yönetim paneli sayesinde ustalar, müşteriler, talepler ve teklifler üzerinde tam kontrol
 
 ## Kurulum
 
@@ -60,6 +63,15 @@ Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. S
 - `POST /api/requests` — yeni hizmet talebi oluşturma (yalnızca müşteri)
 - `POST /api/requests/:requestId/offers` — ustaların taleplere teklif göndermesi
 - `POST /api/requests/:requestId/offers/:offerId/accept` — müşterinin teklifi opsiyonel puan ve yorumla kabul etmesi
+- `GET /api/locations` — kayıt ve panellerde kullanılan Trabzon/Gümüşhane/Rize konum listesi
+
+### Yönetici
+
+- `GET /api/admin/summary` — ustalar, müşteriler, talepler ve teklifler için özet veri
+- `DELETE /api/admin/providers/:id` — belirtilen ustayı ve ilişkili tekliflerini kaldırma
+- `DELETE /api/admin/customers/:id` — müşteriyi ve taleplerini kaldırma
+- `DELETE /api/admin/requests/:id` — bir talebi tüm teklifleriyle silme
+- `DELETE /api/admin/requests/:requestId/offers/:offerId` — tekil teklifi kaldırma
 
 Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. Medya alanları (avatar, banner, galeri) güncellendiğinde içerikler otomatik olarak `public/uploads` altında ilgili kullanıcı klasörlerine kaydedilir ve API yalnızca göreli dosya yolunu döndürür.
 
@@ -68,3 +80,4 @@ Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. M
 - JSON dosyaları eşzamanlı yazıldığından gerçek projelerde kilitleme veya satır içi kuyruklama gibi önlemler eklenebilir.
 - Üretim ortamında oturum yönetimi veya JWT tabanlı kimlik doğrulama tercih edilmelidir.
 - Görsel yüklemeleri otomatik olarak disk üzerinde saklanır; base64 veri URI'ları istemci oturumunda tutulmaz.
+- Yönetim paneline erişim için sunucu başlatılırken `ADMIN_EMAIL_HASH` ve `ADMIN_PASSWORD_HASH` (veya düz değerlerle `ADMIN_EMAIL` ve `ADMIN_PASSWORD`) ortam değişkenlerini ayarlayarak kendi yönetici hesabınızı belirleyebilirsiniz. Ortam değişkenlerini `.env` dosyasında tutmak isterseniz bu dosya depoya dahil edilmez.

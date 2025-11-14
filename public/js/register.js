@@ -1,4 +1,5 @@
 import { redirectAuthenticated, apiRequest, setSession, renderAlert } from './common.js';
+import { initializeLocationSelects, resolveSelectedLocation } from './locations.js';
 
 redirectAuthenticated();
 
@@ -6,6 +7,10 @@ const form = document.getElementById('register-form');
 const feedback = document.getElementById('feedback');
 const roleSelect = document.getElementById('role');
 const providerExtra = document.getElementById('provider-extra');
+const citySelect = document.getElementById('city');
+const districtSelect = document.getElementById('district');
+
+initializeLocationSelects(citySelect, districtSelect);
 
 roleSelect?.addEventListener('change', () => {
   providerExtra.hidden = roleSelect.value !== 'usta';
@@ -29,7 +34,7 @@ form?.addEventListener('submit', async (event) => {
     email: payload.email?.trim(),
     password: payload.password,
     role: payload.role,
-    city: payload.city?.trim(),
+    ...resolveSelectedLocation(citySelect, districtSelect),
   };
 
   if (payload.role === 'usta') {

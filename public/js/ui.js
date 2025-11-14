@@ -125,7 +125,8 @@ export function createProviderCard(provider, options = {}) {
   professionEl.textContent = provider.profession || provider.category || 'Uzmanlık bilgisi bekleniyor';
   const metaEl = document.createElement('p');
   metaEl.className = 'provider-meta';
-  const metaParts = [provider.city, provider.category].filter(Boolean);
+  const locationText = [provider.city, provider.district].filter(Boolean).join(' • ');
+  const metaParts = [locationText, provider.category].filter(Boolean);
   metaEl.textContent = metaParts.join(' · ');
 
   info.append(nameEl, professionEl, metaEl);

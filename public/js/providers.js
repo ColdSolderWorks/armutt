@@ -47,6 +47,7 @@ function applyFilters() {
       provider.profession,
       provider.category,
       provider.city,
+      provider.district,
       provider.about,
     ]
       .filter(Boolean)

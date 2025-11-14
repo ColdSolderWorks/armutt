@@ -18,7 +18,9 @@ form?.addEventListener('submit', async (event) => {
     setSession(user);
     renderAlert(feedback, 'success', message || 'Giriş başarılı.');
     setTimeout(() => {
-      if (user.role === 'usta') {
+      if (user.role === 'admin') {
+        window.location.replace('/admin-dashboard.html');
+      } else if (user.role === 'usta') {
         window.location.replace('/provider-dashboard.html');
       } else {
         window.location.replace('/customer-dashboard.html');

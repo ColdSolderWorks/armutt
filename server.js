@@ -10,10 +10,73 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json');
+const PROFANITY_FILE = path.join(DATA_DIR, 'profanity.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MEDIA_ROOT = path.join(PUBLIC_DIR, 'uploads');
 const PROVIDER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'providers');
 const CUSTOMER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'customers');
+
+const ADMIN_EMAIL_HASH = process.env.ADMIN_EMAIL_HASH ? String(process.env.ADMIN_EMAIL_HASH) : null;
+const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env.ADMIN_PASSWORD_HASH) : null;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase() : null;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : null;
+const ADMIN_SESSION_TTL = Number(process.env.ADMIN_SESSION_TTL || 1000 * 60 * 60 * 12);
+
+const adminSessions = new Map();
+let profanityCache = null;
+
+const REGIONS = [
+  {
+    city: 'Trabzon',
+    districts: [
+      'Ortahisar',
+      'Akçaabat',
+      'Araklı',
+      'Arsin',
+      'Beşikdüzü',
+      'Çarşıbaşı',
+      'Çaykara',
+      'Dernekpazarı',
+      'Düzköy',
+      'Hayrat',
+      'Köprübaşı',
+      'Maçka',
+      'Of',
+      'Sürmene',
+      'Şalpazarı',
+      'Tonya',
+      'Vakfıkebir',
+      'Yomra',
+    ],
+  },
+  {
+    city: 'Gümüşhane',
+    districts: ['Merkez', 'Kelkit', 'Köse', 'Kürtün', 'Şiran', 'Torul'],
+  },
+  {
+    city: 'Rize',
+    districts: [
+      'Merkez',
+      'Ardeşen',
+      'Çamlıhemşin',
+      'Çayeli',
+      'Derepazarı',
+      'Fındıklı',
+      'Güneysu',
+      'Hemşin',
+      'İkizdere',
+      'İyidere',
+      'Kalkandere',
+      'Pazar',
+    ],
+  },
+];
+
+const REGION_LOOKUP = REGIONS.reduce((acc, region) => {
+  const key = normalizeText(region.city).replace(/\s+/g, '');
+  acc[key] = region;
+  return acc;
+}, {});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -29,6 +92,16 @@ async function ensureMediaRoots() {
     ensureDir(PROVIDER_MEDIA_ROOT),
     ensureDir(CUSTOMER_MEDIA_ROOT),
   ]);
+}
+
+async function removeDirectory(dirPath) {
+  try {
+    await fs.rm(dirPath, { recursive: true, force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
 }
 
 function isDataUrl(value) {
@@ -95,6 +168,301 @@ async function removeFile(publicPath) {
   }
 }
 
+function normalizeText(value) {
+  return (value || '')
+    .toString()
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9ğüşöçıİ\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeRegionKey(value) {
+  return normalizeText(value).replace(/\s+/g, '');
+}
+
+function resolveRegion(city) {
+  const region = REGION_LOOKUP[normalizeRegionKey(city)];
+  return region || REGIONS[0];
+}
+
+function normalizeLocation(city, district) {
+  const region = resolveRegion(city);
+  const normalizedDistrict = normalizeRegionKey(district);
+  const matchedDistrict = region.districts.find((entry) => normalizeRegionKey(entry) === normalizedDistrict);
+  return {
+    city: region.city,
+    district: matchedDistrict || region.districts[0],
+  };
+}
+
+async function loadProfanityList() {
+  if (profanityCache) {
+    return profanityCache;
+  }
+  try {
+    const raw = await fs.readFile(PROFANITY_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    profanityCache = Array.isArray(data) ? data.map((item) => normalizeText(item)).filter(Boolean) : [];
+  } catch (error) {
+    profanityCache = [];
+  }
+  return profanityCache;
+}
+
+async function containsProfanity(value) {
+  if (!value) {
+    return false;
+  }
+  const normalized = normalizeText(value);
+  const list = await loadProfanityList();
+  return list.some((entry) => normalized.includes(entry));
+}
+
+function isAdminConfigured() {
+  return Boolean((ADMIN_EMAIL_HASH || ADMIN_EMAIL) && (ADMIN_PASSWORD_HASH || ADMIN_PASSWORD));
+}
+
+async function compareWithHash(value, hash) {
+  if (!hash) {
+    return false;
+  }
+  try {
+    return await bcrypt.compare(value, hash);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function authenticateAdminCredentials(email, password) {
+  if (!isAdminConfigured()) {
+    return null;
+  }
+
+  const normalizedEmail = (email || '').toLowerCase();
+
+  let emailMatches = false;
+  if (ADMIN_EMAIL_HASH) {
+    emailMatches = await compareWithHash(normalizedEmail, ADMIN_EMAIL_HASH);
+  } else if (ADMIN_EMAIL) {
+    emailMatches = ADMIN_EMAIL === normalizedEmail;
+  }
+
+  if (!emailMatches) {
+    return null;
+  }
+
+  let passwordMatches = false;
+  if (ADMIN_PASSWORD_HASH) {
+    passwordMatches = await compareWithHash(password, ADMIN_PASSWORD_HASH);
+  } else if (ADMIN_PASSWORD) {
+    passwordMatches = ADMIN_PASSWORD === password;
+  }
+
+  if (!passwordMatches) {
+    return null;
+  }
+
+  return normalizedEmail;
+}
+
+function purgeExpiredAdminSessions() {
+  const now = Date.now();
+  for (const [token, session] of adminSessions.entries()) {
+    if (session.expiresAt <= now) {
+      adminSessions.delete(token);
+    }
+  }
+}
+
+function createAdminSession(email) {
+  purgeExpiredAdminSessions();
+  const token = uuid();
+  adminSessions.set(token, { email, expiresAt: Date.now() + ADMIN_SESSION_TTL });
+  return token;
+}
+
+function getAdminSessionFromRequest(req) {
+  purgeExpiredAdminSessions();
+  const authHeader = req.get('authorization') || '';
+  const match = /^Bearer\s+(.+)$/.exec(authHeader);
+  if (!match) {
+    return null;
+  }
+  const token = match[1];
+  const session = adminSessions.get(token);
+  if (!session) {
+    return null;
+  }
+  if (session.expiresAt <= Date.now()) {
+    adminSessions.delete(token);
+    return null;
+  }
+  return { token, ...session };
+}
+
+function requireAdmin(req, res, next) {
+  if (!isAdminConfigured()) {
+    return res.status(404).json({ message: 'Bulunamadı' });
+  }
+  const session = getAdminSessionFromRequest(req);
+  if (!session) {
+    return res.status(401).json({ message: 'Yetkisiz işlem.' });
+  }
+  req.admin = session;
+  return next();
+}
+
+async function removeProviderAccount(providerId) {
+  const users = await getUsers();
+  const index = users.findIndex((candidate) => candidate.id === providerId && candidate.role === 'usta');
+  if (index === -1) {
+    return null;
+  }
+
+  const [removed] = users.splice(index, 1);
+  await saveUsers(users);
+
+  const requests = await getRequests();
+  let changed = false;
+  const sanitizedRequests = requests.map((request) => {
+    if (!Array.isArray(request.offers) || !request.offers.length) {
+      return request;
+    }
+    const filteredOffers = request.offers.filter((offer) => offer.providerId !== providerId);
+    if (filteredOffers.length === request.offers.length) {
+      return request;
+    }
+    changed = true;
+    const acceptedStillExists = filteredOffers.some((offer) => offer.id === request.acceptedOfferId);
+    return {
+      ...request,
+      offers: filteredOffers,
+      acceptedOfferId: acceptedStillExists ? request.acceptedOfferId : null,
+      status: acceptedStillExists ? request.status : 'Teklif Bekleniyor',
+    };
+  });
+  if (changed) {
+    await saveRequests(sanitizedRequests);
+  }
+
+  await removeDirectory(path.join(PROVIDER_MEDIA_ROOT, providerId));
+  return buildProviderSummary(removed);
+}
+
+async function removeCustomerAccount(customerId) {
+  const users = await getUsers();
+  const index = users.findIndex((candidate) => candidate.id === customerId && candidate.role === 'musteri');
+  if (index === -1) {
+    return null;
+  }
+
+  const [removed] = users.splice(index, 1);
+  await saveUsers(users);
+
+  const requests = await getRequests();
+  const filteredRequests = requests.filter((request) => request.userId !== customerId);
+  if (filteredRequests.length !== requests.length) {
+    await saveRequests(filteredRequests);
+  }
+
+  await removeDirectory(path.join(CUSTOMER_MEDIA_ROOT, customerId));
+  return sanitizeUser(removed);
+}
+
+async function removeRequestItem(requestId) {
+  const requests = await getRequests();
+  const index = requests.findIndex((candidate) => candidate.id === requestId);
+  if (index === -1) {
+    return null;
+  }
+  const [removed] = requests.splice(index, 1);
+  await saveRequests(requests);
+  return removed;
+}
+
+async function removeOfferItem(requestId, offerId) {
+  const requests = await getRequests();
+  const request = requests.find((candidate) => candidate.id === requestId);
+  if (!request || !Array.isArray(request.offers)) {
+    return null;
+  }
+
+  const index = request.offers.findIndex((offer) => offer.id === offerId);
+  if (index === -1) {
+    return null;
+  }
+
+  const [removed] = request.offers.splice(index, 1);
+  if (request.acceptedOfferId === removed.id) {
+    request.acceptedOfferId = null;
+    request.status = 'Teklif Bekleniyor';
+  }
+  await saveRequests(requests);
+  return { request, offer: removed };
+}
+
+function countProviderOffers(requests = []) {
+  return requests.reduce((acc, request) => {
+    if (!Array.isArray(request.offers)) {
+      return acc;
+    }
+    request.offers.forEach((offer) => {
+      if (!offer.providerId) return;
+      acc[offer.providerId] = (acc[offer.providerId] || 0) + 1;
+    });
+    return acc;
+  }, {});
+}
+
+function countCustomerRequests(requests = []) {
+  return requests.reduce((acc, request) => {
+    if (!request.userId) {
+      return acc;
+    }
+    acc[request.userId] = (acc[request.userId] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+async function buildAdminSummary() {
+  const [users, requests] = await Promise.all([getUsers(), getRequests()]);
+  const providerOfferCounts = countProviderOffers(requests);
+  const customerRequestCounts = countCustomerRequests(requests);
+
+  const providers = users
+    .filter((user) => user.role === 'usta')
+    .map((user) => ({
+      ...buildProviderSummary(user),
+      email: user.email,
+      offerCount: providerOfferCounts[user.id] || 0,
+    }));
+
+  const customers = users
+    .filter((user) => user.role === 'musteri')
+    .map((user) => ({
+      id: user.id,
+      email: user.email,
+      profile: user.profile || {},
+      requestCount: customerRequestCounts[user.id] || 0,
+    }));
+
+  const requestsWithProviders = mapRequestsWithProviders(requests, users);
+
+  return {
+    stats: {
+      providerCount: providers.length,
+      customerCount: customers.length,
+      requestCount: requestsWithProviders.length,
+    },
+    providers,
+    customers,
+    requests: requestsWithProviders,
+  };
+}
+
 ensureMediaRoots().catch((error) => {
   console.error('Medya klasörleri oluşturulamadı:', error);
 });
@@ -114,6 +482,14 @@ async function getUsers() {
 
 async function saveUsers(users) {
   await writeJson(USERS_FILE, users);
+}
+
+async function getRequests() {
+  return readJson(REQUESTS_FILE);
+}
+
+async function saveRequests(requests) {
+  await writeJson(REQUESTS_FILE, requests);
 }
 
 function sanitizeUser(user) {
@@ -149,6 +525,7 @@ function buildProviderSummary(user) {
     profession: profile.profession || '',
     category: profile.category || 'Belirtilmedi',
     city: profile.city || 'Trabzon',
+    district: profile.district || 'Ortahisar',
     about: profile.about || '',
     rating,
     reviewCount: reviews.length,
@@ -257,6 +634,7 @@ app.put('/api/providers/:id', async (req, res) => {
       lastName,
       profession,
       city,
+      district,
       about,
       category,
       contact,
@@ -269,8 +647,20 @@ app.put('/api/providers/:id', async (req, res) => {
     if (firstName !== undefined) user.profile.firstName = (firstName || '').trim();
     if (lastName !== undefined) user.profile.lastName = (lastName || '').trim();
     if (profession !== undefined) user.profile.profession = (profession || '').trim();
-    if (city !== undefined) user.profile.city = (city || '').trim();
-    if (about !== undefined) user.profile.about = about || '';
+    if (city !== undefined || district !== undefined) {
+      const location = normalizeLocation(
+        city !== undefined ? city : user.profile.city,
+        district !== undefined ? district : user.profile.district,
+      );
+      user.profile.city = location.city;
+      user.profile.district = location.district;
+    }
+    if (about !== undefined) {
+      if (await containsProfanity(about)) {
+        return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
+      }
+      user.profile.about = about || '';
+    }
     if (category !== undefined) user.profile.category = (category || '').trim();
     if (contact !== undefined) {
       user.profile.contact = {
@@ -358,6 +748,10 @@ app.get('/api/categories', async (_req, res) => {
   }
 });
 
+app.get('/api/locations', (_req, res) => {
+  res.json(REGIONS);
+});
+
 app.get('/api/customers/:id', async (req, res) => {
   try {
     const users = await getUsers();
@@ -382,12 +776,19 @@ app.put('/api/customers/:id', async (req, res) => {
       return res.status(404).json({ message: 'Müşteri bulunamadı.' });
     }
 
-    const { firstName, lastName, city, email, phone, avatar } = req.body;
+    const { firstName, lastName, city, district, email, phone, avatar } = req.body;
     user.profile = user.profile || {};
 
     if (firstName !== undefined) user.profile.firstName = firstName;
     if (lastName !== undefined) user.profile.lastName = lastName;
-    if (city !== undefined) user.profile.city = city;
+    if (city !== undefined || district !== undefined) {
+      const location = normalizeLocation(
+        city !== undefined ? city : user.profile.city,
+        district !== undefined ? district : user.profile.district,
+      );
+      user.profile.city = location.city;
+      user.profile.district = location.district;
+    }
     if (email !== undefined) user.profile.email = email;
     if (phone !== undefined) user.profile.phone = phone;
     const customerBaseDir = path.join(CUSTOMER_MEDIA_ROOT, user.id);
@@ -426,12 +827,15 @@ function mapOffersWithProvider(offers = [], users = []) {
             fullName: providerSummary.fullName,
             profession: providerSummary.profession,
             city: providerSummary.city,
+            district: providerSummary.district,
             avatar: providerSummary.avatar,
             contact: providerSummary.contact,
           }
         : {
             id: offer.providerId,
             fullName: offer.providerName || 'Usta',
+            city: offer.providerCity || '',
+            district: offer.providerDistrict || '',
           },
     };
   });
@@ -492,7 +896,12 @@ app.post('/api/requests', async (req, res) => {
       return res.status(400).json({ message: 'Talep oluşturmak için müşteri hesabı gerekir.' });
     }
 
+    if (await containsProfanity(description) || (await containsProfanity(category))) {
+      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
+    }
+
     const requests = await readJson(REQUESTS_FILE);
+    const location = normalizeLocation(customer.profile?.city, customer.profile?.district);
     const newRequest = {
       id: uuid(),
       userId,
@@ -500,6 +909,8 @@ app.post('/api/requests', async (req, res) => {
       description,
       status: 'Teklif Bekleniyor',
       createdAt: new Date().toISOString(),
+      city: location.city,
+      district: location.district,
       offers: [],
     };
     requests.unshift(newRequest);
@@ -524,6 +935,10 @@ app.post('/api/requests/:requestId/offers', async (req, res) => {
       return res.status(400).json({ message: 'Teklif göndermek için usta hesabı gerekir.' });
     }
 
+    if (await containsProfanity(message)) {
+      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
+    }
+
     const requests = await readJson(REQUESTS_FILE);
     const request = requests.find((candidate) => candidate.id === req.params.requestId);
 
@@ -538,6 +953,8 @@ app.post('/api/requests/:requestId/offers', async (req, res) => {
       providerId,
       providerName: providerSummary.fullName,
       providerProfession: providerSummary.profession,
+      providerCity: providerSummary.city,
+      providerDistrict: providerSummary.district,
       message,
       price,
       status: 'Beklemede',
@@ -581,6 +998,10 @@ app.post('/api/requests/:requestId/offers/:offerId/accept', async (req, res) => 
       return res.status(404).json({ message: 'Teklif bulunamadı.' });
     }
 
+    if (comment && (await containsProfanity(comment))) {
+      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
+    }
+
     request.offers = request.offers.map((candidate) => ({
       ...candidate,
       status: candidate.id === offer.id ? 'Kabul Edildi' : 'Reddedildi',
@@ -611,7 +1032,17 @@ app.post('/api/requests/:requestId/offers/:offerId/accept', async (req, res) => 
 });
 
 app.post('/api/auth/register', async (req, res) => {
-  const { firstName, lastName, email, password, role, profession, city, category } = req.body;
+  const {
+    firstName,
+    lastName,
+    email,
+    password,
+    role,
+    profession,
+    city: cityInput,
+    district: districtInput,
+    category,
+  } = req.body;
 
   if (!firstName || !lastName || !email || !password || !role) {
     return res.status(400).json({ message: 'Lütfen tüm alanları doldurun.' });
@@ -630,10 +1061,12 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const id = uuid();
+    const location = normalizeLocation(cityInput, districtInput);
     const profileBase = {
       firstName,
       lastName,
-      city: city || '',
+      city: location.city,
+      district: location.district,
       avatar: '',
     };
 
@@ -689,8 +1122,29 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
+    const adminEmail = await authenticateAdminCredentials(email, password);
+    if (adminEmail) {
+      const token = createAdminSession(adminEmail);
+      return res.json({
+        message: 'Giriş başarılı.',
+        user: {
+          id: 'admin',
+          role: 'admin',
+          email: adminEmail,
+          token,
+          profile: {
+            firstName: 'Yönetici',
+            lastName: '',
+            city: 'Trabzon',
+            district: 'Merkez',
+          },
+        },
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase();
     const users = await getUsers();
-    const user = users.find((candidate) => candidate.email.toLowerCase() === email.toLowerCase());
+    const user = users.find((candidate) => candidate.email.toLowerCase() === normalizedEmail);
 
     if (!user) {
       return res.status(401).json({ message: 'E-posta veya şifre hatalı.' });
@@ -709,6 +1163,73 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ message: 'Giriş sırasında bir sorun oluştu.' });
   }
 });
+
+const adminRouter = express.Router();
+
+adminRouter.use(requireAdmin);
+
+adminRouter.get('/summary', async (_req, res) => {
+  try {
+    const summary = await buildAdminSummary();
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: 'Yönetici verileri yüklenemedi.' });
+  }
+});
+
+adminRouter.delete('/providers/:id', async (req, res) => {
+  try {
+    const provider = await removeProviderAccount(req.params.id);
+    if (!provider) {
+      return res.status(404).json({ message: 'Usta bulunamadı.' });
+    }
+    const summary = await buildAdminSummary();
+    return res.json({ message: 'Usta kaldırıldı.', provider, summary });
+  } catch (error) {
+    return res.status(500).json({ message: 'Usta silinemedi.' });
+  }
+});
+
+adminRouter.delete('/customers/:id', async (req, res) => {
+  try {
+    const customer = await removeCustomerAccount(req.params.id);
+    if (!customer) {
+      return res.status(404).json({ message: 'Müşteri bulunamadı.' });
+    }
+    const summary = await buildAdminSummary();
+    return res.json({ message: 'Müşteri kaldırıldı.', customer, summary });
+  } catch (error) {
+    return res.status(500).json({ message: 'Müşteri silinemedi.' });
+  }
+});
+
+adminRouter.delete('/requests/:id', async (req, res) => {
+  try {
+    const removed = await removeRequestItem(req.params.id);
+    if (!removed) {
+      return res.status(404).json({ message: 'Talep bulunamadı.' });
+    }
+    const summary = await buildAdminSummary();
+    return res.json({ message: 'Talep kaldırıldı.', request: removed, summary });
+  } catch (error) {
+    return res.status(500).json({ message: 'Talep silinemedi.' });
+  }
+});
+
+adminRouter.delete('/requests/:requestId/offers/:offerId', async (req, res) => {
+  try {
+    const removed = await removeOfferItem(req.params.requestId, req.params.offerId);
+    if (!removed) {
+      return res.status(404).json({ message: 'Teklif bulunamadı.' });
+    }
+    const summary = await buildAdminSummary();
+    return res.json({ message: 'Teklif kaldırıldı.', summary });
+  } catch (error) {
+    return res.status(500).json({ message: 'Teklif silinemedi.' });
+  }
+});
+
+app.use('/api/admin', adminRouter);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Bulunamadı' });

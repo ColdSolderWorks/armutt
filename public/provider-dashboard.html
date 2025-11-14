@@ -28,6 +28,7 @@
           <div>
             <h1 id="provider-name-display">Usta Paneli</h1>
             <p id="provider-profession-display">Uzmanlık bilgilerinizi güncelleyin.</p>
+            <p class="profile-location" id="provider-city-display"></p>
             <div class="profile-meta" id="provider-meta-display"></div>
           </div>
           <div class="profile-actions">
@@ -62,7 +63,15 @@
                 </div>
                 <div>
                   <label for="prov-city">Şehir</label>
-                  <input id="prov-city" name="city" type="text" placeholder="Trabzon" />
+                  <select id="prov-city" name="city" required>
+                    <option value="">Şehir seçin</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="prov-district">İlçe</label>
+                  <select id="prov-district" name="district" required>
+                    <option value="">İlçe seçin</option>
+                  </select>
                 </div>
               </div>
               <div>

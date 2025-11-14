@@ -117,7 +117,8 @@ async function loadProvider() {
     nameEl.textContent = provider.fullName;
     professionEl.textContent = provider.profession || provider.category || 'Uzmanlık bilgisi bekleniyor';
 
-    const metaParts = [provider.city, provider.contact?.phone, provider.contact?.email]
+    const locationText = [provider.city, provider.district].filter(Boolean).join(' • ');
+    const metaParts = [locationText, provider.contact?.phone, provider.contact?.email]
       .filter(Boolean)
       .map((part) => `<span>${part}</span>`);
     metaEl.innerHTML = metaParts.join('<span class="dot"></span>');
@@ -142,7 +143,7 @@ async function loadProvider() {
 
     if (tagsEl) {
       tagsEl.innerHTML = '';
-      const tags = [provider.profession, provider.category, provider.city].filter(Boolean);
+      const tags = [provider.profession, provider.category, locationText].filter(Boolean);
       if (tags.length) {
         tags.forEach((tag) => {
           const item = document.createElement('li');

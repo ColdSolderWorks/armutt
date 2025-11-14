@@ -9,6 +9,7 @@ import {
   createStatusPill,
 } from './common.js';
 import { initialsFromName } from './ui.js';
+import { initializeLocationSelects, resolveSelectedLocation } from './locations.js';
 
 const session = ensureRole('musteri');
 if (!session) {
@@ -26,6 +27,8 @@ const heroMeta = document.getElementById('customer-meta-display');
 const heroAvatar = document.getElementById('customer-avatar-display');
 const statsList = document.getElementById('customer-stats');
 const latestOffersContainer = document.getElementById('customer-latest-offers');
+const citySelect = document.getElementById('cust-city');
+const districtSelect = document.getElementById('cust-district');
 
 attachLogout(document.getElementById('logout'));
 
@@ -33,6 +36,25 @@ document.title = `Müşteri Paneli | ${session.profile?.firstName || 'Trabzonİ�
 
 let customerData = null;
 let customerRequests = [];
+let locationInitialized = false;
+
+async function syncLocationSelectors(city, district) {
+  if (!citySelect || !districtSelect) {
+    return;
+  }
+  if (!locationInitialized) {
+    await initializeLocationSelects(citySelect, districtSelect, { city, district });
+    locationInitialized = true;
+    return;
+  }
+  if (city) {
+    citySelect.value = city;
+    citySelect.dispatchEvent(new Event('change'));
+  }
+  if (district) {
+    districtSelect.value = district;
+  }
+}
 
 function renderHero() {
   if (!customerData) return;
@@ -42,7 +64,10 @@ function renderHero() {
     heroName.textContent = fullName || 'Müşteri Paneli';
   }
   if (heroCity) {
-    heroCity.textContent = profile.city || 'Şehrinizi ve iletişim bilgilerinizi güncelleyin.';
+    const locationParts = [profile.city, profile.district].filter(Boolean);
+    heroCity.textContent = locationParts.length
+      ? locationParts.join(' • ')
+      : 'Şehrinizi ve iletişim bilgilerinizi güncelleyin.';
   }
   if (heroMeta) {
     const metaParts = [profile.email || customerData.email, profile.phone]
@@ -63,12 +88,12 @@ function renderHero() {
   }
 }
 
-function populateProfileForm() {
-  if (!customerData) return;
+async function populateProfileForm() {
+  if (!customerData || !profileForm) return;
   const profile = customerData.profile || {};
   profileForm.querySelector('#cust-firstName').value = profile.firstName || '';
   profileForm.querySelector('#cust-lastName').value = profile.lastName || '';
-  profileForm.querySelector('#cust-city').value = profile.city || '';
+  await syncLocationSelectors(profile.city, profile.district);
   profileForm.querySelector('#cust-email').value = profile.email || session.email || '';
   profileForm.querySelector('#cust-phone').value = profile.phone || '';
 }
@@ -77,8 +102,8 @@ async function loadCustomer() {
   try {
     customerData = await apiRequest(`/api/customers/${session.id}`);
     renderHero();
-    populateProfileForm();
-  } catch (error) {
+    await populateProfileForm();
+    } catch (error) {
     renderAlert(feedback, 'error', error.message);
   }
 }
@@ -89,7 +114,7 @@ profileForm?.addEventListener('submit', async (event) => {
   const payload = {
     firstName: formData.get('firstName'),
     lastName: formData.get('lastName'),
-    city: formData.get('city'),
+    ...resolveSelectedLocation(citySelect, districtSelect),
     email: formData.get('email'),
     phone: formData.get('phone'),
   };
@@ -169,10 +194,12 @@ function renderRequests(requests = []) {
   requests.forEach((request) => {
     const item = document.createElement('div');
     item.className = 'list-item';
+    const locationText = [request.city, request.district].filter(Boolean).join(' • ');
     item.innerHTML = `
       <div class="section-header">
         <div>
           <strong>${request.category}</strong>
+          ${locationText ? `<div class="section-sub">${locationText}</div>` : ''}
           <div>${createStatusPill(request.status)}</div>
         </div>
         <small>${formatDate(request.createdAt)}</small>
@@ -194,11 +221,15 @@ function renderRequests(requests = []) {
         const provider = offer.provider || {};
         const providerName = provider.fullName || offer.providerName || 'Usta';
         const providerProfession = provider.profession || offer.providerProfession || '';
+        const providerLocation = [provider.city || offer.providerCity, provider.district || offer.providerDistrict]
+          .filter(Boolean)
+          .join(' • ');
         offerCard.innerHTML = `
           <header class="offer-header">
             <div>
               <strong>${providerName}</strong>
               <span>${providerProfession}</span>
+              ${providerLocation ? `<span class="offer-location">${providerLocation}</span>` : ''}
             </div>
             <div>${createStatusPill(offer.status)}</div>
           </header>
@@ -308,11 +339,15 @@ function renderLatestOffers() {
   offers.forEach(({ offer, request }) => {
     const provider = offer.provider || {};
     const providerName = provider.fullName || offer.providerName || 'Usta';
+    const providerLocation = [provider.city || offer.providerCity, provider.district || offer.providerDistrict]
+      .filter(Boolean)
+      .join(' • ');
     const card = document.createElement('div');
     card.className = 'list-item';
     card.innerHTML = `
       <strong>${providerName}</strong>
       <p>${request.category} · ${offer.price} ₺</p>
+      ${providerLocation ? `<p class="offer-location">${providerLocation}</p>` : ''}
       <small>${formatDate(offer.createdAt)} · ${createStatusPill(offer.status)}</small>
     `;
     latestOffersContainer.appendChild(card);

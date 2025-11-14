@@ -23,6 +23,10 @@ export function redirectAuthenticated() {
   if (!session) {
     return;
   }
+  if (session.role === 'admin') {
+    window.location.replace('/admin-dashboard.html');
+    return;
+  }
   if (session.role === 'usta') {
     window.location.replace('/provider-dashboard.html');
   } else if (session.role === 'musteri') {
@@ -83,6 +87,10 @@ export async function apiRequest(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   };
+  const session = getSession();
+  if (session?.role === 'admin' && session?.token) {
+    config.headers = { ...config.headers, Authorization: `Bearer ${session.token}` };
+  }
   const response = await fetch(path, config);
   let payload = null;
   try {

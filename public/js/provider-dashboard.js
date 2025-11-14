@@ -11,6 +11,7 @@ import {
   createStatusPill,
 } from './common.js';
 import { initialsFromName, initializeMediaLightbox } from './ui.js';
+import { initializeLocationSelects, resolveSelectedLocation } from './locations.js';
 
 const session = ensureRole('usta');
 if (!session) {
@@ -35,12 +36,34 @@ const heroMeta = document.getElementById('provider-meta-display');
 const heroAvatar = document.getElementById('provider-avatar-display');
 const heroBanner = document.getElementById('provider-banner-display');
 const statsList = document.getElementById('provider-stats');
+const heroCity = document.getElementById('provider-city-display');
+const citySelect = document.getElementById('prov-city');
+const districtSelect = document.getElementById('prov-district');
 
 attachLogout(document.getElementById('logout'));
 
 document.title = `Usta Paneli | ${session.profile?.firstName || 'TrabzonİşBul'}`;
 
 let providerData = null;
+let locationInitialized = false;
+
+async function syncLocationSelectors(city, district) {
+  if (!citySelect || !districtSelect) {
+    return;
+  }
+  if (!locationInitialized) {
+    await initializeLocationSelects(citySelect, districtSelect, { city, district });
+    locationInitialized = true;
+    return;
+  }
+  if (city) {
+    citySelect.value = city;
+    citySelect.dispatchEvent(new Event('change'));
+  }
+  if (district) {
+    districtSelect.value = district;
+  }
+}
 
 function patchLocalSessionProfile(patch) {
   session.profile = {
@@ -58,11 +81,15 @@ function renderHero() {
     heroProfession.textContent =
       providerData.profession || providerData.category || 'Uzmanlık bilgilerinizi güncelleyin.';
   }
+  if (heroCity) {
+    const locationParts = [providerData.city, providerData.district].filter(Boolean);
+    heroCity.textContent = locationParts.length
+      ? locationParts.join(' • ')
+      : 'Konumunuzu güncelleyin.';
+  }
   if (heroMeta) {
-    const metaParts = [providerData.city, providerData.contact?.phone, providerData.contact?.email].filter(Boolean);
-    heroMeta.innerHTML = metaParts
-      .map((part) => `<span>${part}</span>`)
-      .join('<span class="dot"></span>');
+    const metaParts = [providerData.contact?.phone, providerData.contact?.email].filter(Boolean);
+    heroMeta.innerHTML = metaParts.map((part) => `<span>${part}</span>`).join('<span class="dot"></span>');
   }
   if (heroAvatar) {
     heroAvatar.textContent = '';
@@ -115,22 +142,23 @@ function renderSummary() {
     if (providerData.category) {
       badgeParts.push(providerData.category);
     }
-    if (providerData.city) {
-      badgeParts.push(providerData.city);
+    const locationText = [providerData.city, providerData.district].filter(Boolean).join(' / ');
+    if (locationText) {
+      badgeParts.push(locationText);
     }
     summaryBadge.textContent = badgeParts.join(' · ') || 'Profilinizi tamamlayın';
   }
   renderHero();
 }
 
-function populateProfileForm() {
-  if (!providerData) return;
+async function populateProfileForm() {
+  if (!providerData || !profileForm) return;
   const profile = providerData;
   profileForm.querySelector('#prov-firstName').value = profile.firstName || '';
   profileForm.querySelector('#prov-lastName').value = profile.lastName || '';
   profileForm.querySelector('#prov-profession').value = profile.profession || '';
   profileForm.querySelector('#prov-category').value = profile.category || '';
-  profileForm.querySelector('#prov-city').value = profile.city || '';
+  await syncLocationSelectors(profile.city, profile.district);
   profileForm.querySelector('#prov-about').value = profile.about || '';
 }
 
@@ -207,7 +235,7 @@ async function loadProvider() {
   try {
     providerData = await apiRequest(`/api/providers/${session.id}`);
     renderSummary();
-    populateProfileForm();
+    await populateProfileForm();
     populateContactForm();
     renderMedia();
   } catch (error) {
@@ -219,6 +247,7 @@ profileForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(profileForm);
   const payload = Object.fromEntries(formData.entries());
+  Object.assign(payload, resolveSelectedLocation(citySelect, districtSelect));
   try {
     const updated = await apiRequest(`/api/providers/${session.id}`, {
       method: 'PUT',
@@ -230,6 +259,7 @@ profileForm?.addEventListener('submit', async (event) => {
       profession: updated.profession,
       category: updated.category,
       city: updated.city,
+      district: updated.district,
       about: updated.about,
     };
     updateSessionProfile(profilePatch);
