@@ -82,8 +82,9 @@ app.use((req, res, next) => {
 });
 app.use(express.static(PUBLIC_DIR, { index: false, dotfiles: 'ignore' }));
 
-app.get('/media/:path(*)', (req, res, next) => {
-  const relativePath = req.params.path || '';
+// Use a regex route to avoid path-to-regexp wildcard parsing incompatibilities.
+app.get(/^\/media\/(.*)/, (req, res, next) => {
+  const relativePath = req.params[0] || '';
   const absolute = fromPublicPath(`media/${relativePath}`);
   if (!absolute) return res.status(404).json({ message: 'Dosya bulunamadı.' });
   return res.sendFile(absolute, { dotfiles: 'deny' }, (err) => {
