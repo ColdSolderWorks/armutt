@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ustalar | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/login.html">Giriş Yap</a></li>
+            <li><a href="/providers.html" aria-current="page">Ustalar</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+            <li><a href="/register.html" class="pill-link">Kayıt Ol</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="card page-header">
+        <div>
+          <h1>Trabzon'daki ustalar</h1>
+          <p>
+            Tüm hizmet kategorilerindeki profesyonelleri inceleyin. Arama kutusunu veya kategori
+            filtresini kullanarak ihtiyacınız olan uzmanı bulun.
+          </p>
+        </div>
+        <form id="providers-search" class="search-bar" role="search">
+          <input
+            type="search"
+            id="providers-query"
+            name="query"
+            placeholder="Örn. boya, nakliyat, temizlik..."
+            aria-label="Usta ara"
+          />
+          <button type="submit" class="button button-primary">Ara</button>
+        </form>
+        <div class="filters">
+          <label>
+            Kategori
+            <select id="providers-category">
+              <option value="">Hepsi</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="provider-results">
+        <div id="providers-grid" class="provider-grid" aria-live="polite"></div>
+        <div id="providers-empty" class="empty-state" hidden>
+          Kriterlerinize uygun usta bulunamadı. Farklı bir arama deneyebilirsiniz.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/providers.js"></script>
+  </body>
+</html>
