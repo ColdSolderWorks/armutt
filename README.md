@@ -26,6 +26,26 @@ npm start
 
 Uygulama [http://localhost:3000](http://localhost:3000) adresinde çalışır. Sunucu statik dosyaları da aynı porttan servis eder; tarayıcıdan doğrudan `/login.html`, `/register.html`, `/customer-dashboard.html` ve `/provider-dashboard.html` sayfalarına erişebilirsiniz.
 
+### Yönetici hesabını etkinleştirme
+
+Projeyi ilk kez çalıştırdığınızda yönetici paneli kapalıdır. Paneli açmak için gizli bilgilerinizi ortam değişkenlerine girmeniz gerekir:
+
+1. Depodaki `.env.example` dosyasını kopyalayın ve `.env` olarak yeniden adlandırın.
+2. `ADMIN_EMAIL` ve `ADMIN_PASSWORD` satırlarının başındaki `#` karakterini silip kullanmak istediğiniz yönetici e-postası ile parolasını yazın. İsterseniz aynı dosyada yer alan `ADMIN_EMAIL_HASH` ve `ADMIN_PASSWORD_HASH` satırlarına `bcrypt` hash'leri koyup düz değerleri boş bırakabilirsiniz.
+3. Dosyayı kaydedin ve terminalde projenin kök klasöründe aşağıdaki komutu çalıştırarak sunucuyu başlatın:
+
+   ```bash
+   npm start
+   ```
+
+Sunucu `.env` dosyasını okuyarak yönetici bilgileriyle giriş yapılmasına izin verir. Ortam değişkenlerini tek seferlik komutla vermek isterseniz aşağıdaki gibi kullanabilirsiniz:
+
+```bash
+ADMIN_EMAIL="your-admin-email@example.com" ADMIN_PASSWORD="your-strong-password" npm start
+```
+
+Gizli bilgiler `.env` dosyasında kaldığı sürece depoya eklenmez ve Git geçmişine girmez.
+
 ## JSON Deposu
 
 | Dosya | İçerik |
@@ -80,4 +100,4 @@ Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. M
 - JSON dosyaları eşzamanlı yazıldığından gerçek projelerde kilitleme veya satır içi kuyruklama gibi önlemler eklenebilir.
 - Üretim ortamında oturum yönetimi veya JWT tabanlı kimlik doğrulama tercih edilmelidir.
 - Görsel yüklemeleri otomatik olarak disk üzerinde saklanır; base64 veri URI'ları istemci oturumunda tutulmaz.
-- Yönetim paneline erişim için sunucu başlatılırken `ADMIN_EMAIL_HASH` ve `ADMIN_PASSWORD_HASH` (veya düz değerlerle `ADMIN_EMAIL` ve `ADMIN_PASSWORD`) ortam değişkenlerini ayarlayarak kendi yönetici hesabınızı belirleyebilirsiniz. Ortam değişkenlerini `.env` dosyasında tutmak isterseniz bu dosya depoya dahil edilmez.
+- Yönetim paneline erişim için ortam değişkenlerini ayarlama adımları "Yönetici hesabını etkinleştirme" bölümünde açıklanmıştır; `.env` dosyası depoya eklenmez.
