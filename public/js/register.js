@@ -43,12 +43,19 @@ form?.addEventListener('submit', async (event) => {
   }
 
   try {
-    const { user, message } = await apiRequest('/api/auth/register', {
+    const registerResponse = await apiRequest('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(submission),
     });
+
+    const verifyResponse = await apiRequest('/api/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email: submission.email, code: registerResponse.verificationCode }),
+    });
+
+    const { user, message } = verifyResponse;
     setSession(user);
-    renderAlert(feedback, 'success', message || 'Kayıt başarılı. Yönlendiriliyorsunuz...');
+    renderAlert(feedback, 'success', message || 'Kayıt ve doğrulama tamamlandı. Yönlendiriliyorsunuz...');
     setTimeout(() => {
       if (user.role === 'usta') {
         window.location.replace('/provider-dashboard.html');

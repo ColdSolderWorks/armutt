@@ -1,29 +1,35 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs/promises');
-const bcrypt = require('bcrypt');
+const { existsSync } = require('fs');
 const { v4: uuid } = require('uuid');
+const bcrypt = require('bcrypt');
+const {
+  sanitizeText,
+  validatePasswordComplexity,
+  validateEmail,
+  randomFileName,
+  hashPassword,
+  comparePassword,
+  ALLOWED_MIMES,
+} = require('./src/utils/security');
+const { openDatabase, run, get, all } = require('./src/db');
+const { createToken, authMiddleware } = require('./src/middleware/auth');
+const { errorHandler } = require('./src/middleware/error');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json');
-const PROFANITY_FILE = path.join(DATA_DIR, 'profanity.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MEDIA_ROOT = path.join(PUBLIC_DIR, 'uploads');
 const PROVIDER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'providers');
 const CUSTOMER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'customers');
+const PROFANITY_FILE = path.join(DATA_DIR, 'profanity.json');
 
 const ADMIN_EMAIL_HASH = process.env.ADMIN_EMAIL_HASH ? String(process.env.ADMIN_EMAIL_HASH) : null;
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env.ADMIN_PASSWORD_HASH) : null;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase() : null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : null;
-const ADMIN_SESSION_TTL = Number(process.env.ADMIN_SESSION_TTL || 1000 * 60 * 60 * 12);
-
-const adminSessions = new Map();
-let profanityCache = null;
 
 const REGIONS = [
   {
@@ -49,124 +55,24 @@ const REGIONS = [
       'Yomra',
     ],
   },
-  {
-    city: 'Gümüşhane',
-    districts: ['Merkez', 'Kelkit', 'Köse', 'Kürtün', 'Şiran', 'Torul'],
-  },
+  { city: 'Gümüşhane', districts: ['Merkez', 'Kelkit', 'Köse', 'Kürtün', 'Şiran', 'Torul'] },
   {
     city: 'Rize',
-    districts: [
-      'Merkez',
-      'Ardeşen',
-      'Çamlıhemşin',
-      'Çayeli',
-      'Derepazarı',
-      'Fındıklı',
-      'Güneysu',
-      'Hemşin',
-      'İkizdere',
-      'İyidere',
-      'Kalkandere',
-      'Pazar',
-    ],
+    districts: ['Merkez', 'Ardeşen', 'Çamlıhemşin', 'Çayeli', 'Derepazarı', 'Fındıklı', 'Güneysu', 'Hemşin', 'İkizdere', 'İyidere', 'Kalkandere', 'Pazar'],
   },
 ];
 
 const REGION_LOOKUP = REGIONS.reduce((acc, region) => {
-  const key = normalizeText(region.city).replace(/\s+/g, '');
+  const key = normalizeRegionKey(region.city);
   acc[key] = region;
   return acc;
 }, {});
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(PUBLIC_DIR));
 
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function ensureMediaRoots() {
-  await Promise.all([
-    ensureDir(DATA_DIR),
-    ensureDir(MEDIA_ROOT),
-    ensureDir(PROVIDER_MEDIA_ROOT),
-    ensureDir(CUSTOMER_MEDIA_ROOT),
-  ]);
-}
-
-async function removeDirectory(dirPath) {
-  try {
-    await fs.rm(dirPath, { recursive: true, force: true });
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-}
-
-function isDataUrl(value) {
-  return typeof value === 'string' && value.startsWith('data:');
-}
-
-function parseDataUrl(dataUrl) {
-  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
-  if (!match) {
-    throw new Error('Geçersiz veri URLsi.');
-  }
-  const mime = match[1];
-  const base64 = match[2];
-  const buffer = Buffer.from(base64, 'base64');
-  const extension = (() => {
-    if (!mime) return 'bin';
-    if (mime === 'image/jpeg') return 'jpg';
-    if (mime === 'image/png') return 'png';
-    if (mime === 'image/gif') return 'gif';
-    if (mime === 'image/webp') return 'webp';
-    if (mime === 'image/svg+xml') return 'svg';
-    const [, subtype] = mime.split('/');
-    return subtype || 'bin';
-  })();
-
-  return { buffer, extension, mime };
-}
-
-function toPublicPath(filePath) {
-  const relative = path.relative(PUBLIC_DIR, filePath);
-  return `/${relative.split(path.sep).join('/')}`;
-}
-
-function fromPublicPath(publicPath) {
-  if (!publicPath) return null;
-  const cleaned = publicPath.replace(/^\/+/, '');
-  return path.join(PUBLIC_DIR, cleaned);
-}
-
-async function saveDataUrlToFile(dataUrl, baseDir, prefix) {
-  if (!isDataUrl(dataUrl)) {
-    return dataUrl;
-  }
-  await ensureDir(baseDir);
-  const { buffer, extension } = parseDataUrl(dataUrl);
-  const fileName = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${extension}`;
-  const destination = path.join(baseDir, fileName);
-  await fs.writeFile(destination, buffer);
-  return toPublicPath(destination);
-}
-
-async function removeFile(publicPath) {
-  if (!publicPath) {
-    return;
-  }
-  const absolute = fromPublicPath(publicPath);
-  if (!absolute) return;
-  try {
-    await fs.unlink(absolute);
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-}
+const db = openDatabase();
+let profanityCache = null;
 
 function normalizeText(value) {
   return (value || '')
@@ -198,1043 +104,659 @@ function normalizeLocation(city, district) {
   };
 }
 
-async function loadProfanityList() {
-  if (profanityCache) {
-    return profanityCache;
+async function ensureDir(dirPath) {
+  await fs.mkdir(dirPath, { recursive: true });
+}
+
+async function ensureMediaRoots() {
+  await Promise.all([ensureDir(DATA_DIR), ensureDir(MEDIA_ROOT), ensureDir(PROVIDER_MEDIA_ROOT), ensureDir(CUSTOMER_MEDIA_ROOT)]);
+}
+
+function isDataUrl(value) {
+  return typeof value === 'string' && value.startsWith('data:');
+}
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
+  if (!match) {
+    throw new Error('Geçersiz veri URLsi.');
   }
+  const mime = match[1];
+  const base64 = match[2];
+  if (!ALLOWED_MIMES.includes(mime)) {
+    const error = new Error('Sadece JPEG ve PNG dosyalarına izin veriliyor.');
+    error.status = 400;
+    throw error;
+  }
+  const buffer = Buffer.from(base64, 'base64');
+  const extension = mime === 'image/png' ? 'png' : 'jpg';
+  return { buffer, extension, mime };
+}
+
+function toPublicPath(filePath) {
+  const relative = path.relative(PUBLIC_DIR, filePath);
+  return `/${relative.split(path.sep).join('/')}`;
+}
+
+function fromPublicPath(publicPath) {
+  if (!publicPath) return null;
+  const cleaned = publicPath.replace(/^\/+/, '');
+  return path.join(PUBLIC_DIR, cleaned);
+}
+
+async function saveMedia(dataUrl, baseDir) {
+  if (!dataUrl) return '';
+  if (!isDataUrl(dataUrl)) return dataUrl;
+  const { buffer, extension } = parseDataUrl(dataUrl);
+  await ensureDir(baseDir);
+  const fileName = randomFileName(extension);
+  const destination = path.join(baseDir, fileName);
+  await fs.writeFile(destination, buffer);
+  return toPublicPath(destination);
+}
+
+async function removeFile(publicPath) {
+  if (!publicPath) return;
+  const absolute = fromPublicPath(publicPath);
+  if (!absolute) return;
   try {
-    const raw = await fs.readFile(PROFANITY_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    profanityCache = Array.isArray(data) ? data.map((item) => normalizeText(item)).filter(Boolean) : [];
+    await fs.unlink(absolute);
   } catch (error) {
-    profanityCache = [];
+    if (error.code !== 'ENOENT') throw error;
   }
+}
+
+async function loadProfanityList() {
+  if (profanityCache) return profanityCache;
+  if (!existsSync(PROFANITY_FILE)) return [];
+  const raw = await fs.readFile(PROFANITY_FILE, 'utf-8');
+  const data = JSON.parse(raw);
+  profanityCache = Array.isArray(data) ? data.map((item) => normalizeText(item)) : [];
   return profanityCache;
 }
 
-async function containsProfanity(value) {
-  if (!value) {
-    return false;
-  }
+async function hasProfanity(value) {
   const normalized = normalizeText(value);
-  const list = await loadProfanityList();
-  return list.some((entry) => normalized.includes(entry));
+  const entries = await loadProfanityList();
+  return entries.some((entry) => normalized.includes(entry));
 }
 
-function isAdminConfigured() {
-  return Boolean((ADMIN_EMAIL_HASH || ADMIN_EMAIL) && (ADMIN_PASSWORD_HASH || ADMIN_PASSWORD));
-}
-
-async function compareWithHash(value, hash) {
-  if (!hash) {
-    return false;
-  }
-  try {
-    return await bcrypt.compare(value, hash);
-  } catch (error) {
-    return false;
-  }
-}
-
-async function authenticateAdminCredentials(email, password) {
-  if (!isAdminConfigured()) {
-    return null;
-  }
-
-  const normalizedEmail = (email || '').toLowerCase();
-
-  let emailMatches = false;
-  if (ADMIN_EMAIL_HASH) {
-    emailMatches = await compareWithHash(normalizedEmail, ADMIN_EMAIL_HASH);
-  } else if (ADMIN_EMAIL) {
-    emailMatches = ADMIN_EMAIL === normalizedEmail;
-  }
-
-  if (!emailMatches) {
-    return null;
-  }
-
-  let passwordMatches = false;
-  if (ADMIN_PASSWORD_HASH) {
-    passwordMatches = await compareWithHash(password, ADMIN_PASSWORD_HASH);
-  } else if (ADMIN_PASSWORD) {
-    passwordMatches = ADMIN_PASSWORD === password;
-  }
-
-  if (!passwordMatches) {
-    return null;
-  }
-
-  return normalizedEmail;
-}
-
-function purgeExpiredAdminSessions() {
-  const now = Date.now();
-  for (const [token, session] of adminSessions.entries()) {
-    if (session.expiresAt <= now) {
-      adminSessions.delete(token);
-    }
-  }
-}
-
-function createAdminSession(email) {
-  purgeExpiredAdminSessions();
-  const token = uuid();
-  adminSessions.set(token, { email, expiresAt: Date.now() + ADMIN_SESSION_TTL });
-  return token;
-}
-
-function getAdminSessionFromRequest(req) {
-  purgeExpiredAdminSessions();
-  const authHeader = req.get('authorization') || '';
-  const match = /^Bearer\s+(.+)$/.exec(authHeader);
-  if (!match) {
-    return null;
-  }
-  const token = match[1];
-  const session = adminSessions.get(token);
-  if (!session) {
-    return null;
-  }
-  if (session.expiresAt <= Date.now()) {
-    adminSessions.delete(token);
-    return null;
-  }
-  return { token, ...session };
-}
-
-function requireAdmin(req, res, next) {
-  if (!isAdminConfigured()) {
-    return res.status(404).json({ message: 'Bulunamadı' });
-  }
-  const session = getAdminSessionFromRequest(req);
-  if (!session) {
-    return res.status(401).json({ message: 'Yetkisiz işlem.' });
-  }
-  req.admin = session;
-  return next();
-}
-
-async function removeProviderAccount(providerId) {
-  const users = await getUsers();
-  const index = users.findIndex((candidate) => candidate.id === providerId && candidate.role === 'usta');
-  if (index === -1) {
-    return null;
-  }
-
-  const [removed] = users.splice(index, 1);
-  await saveUsers(users);
-
-  const requests = await getRequests();
-  let changed = false;
-  const sanitizedRequests = requests.map((request) => {
-    if (!Array.isArray(request.offers) || !request.offers.length) {
-      return request;
-    }
-    const filteredOffers = request.offers.filter((offer) => offer.providerId !== providerId);
-    if (filteredOffers.length === request.offers.length) {
-      return request;
-    }
-    changed = true;
-    const acceptedStillExists = filteredOffers.some((offer) => offer.id === request.acceptedOfferId);
-    return {
-      ...request,
-      offers: filteredOffers,
-      acceptedOfferId: acceptedStillExists ? request.acceptedOfferId : null,
-      status: acceptedStillExists ? request.status : 'Teklif Bekleniyor',
-    };
-  });
-  if (changed) {
-    await saveRequests(sanitizedRequests);
-  }
-
-  await removeDirectory(path.join(PROVIDER_MEDIA_ROOT, providerId));
-  return buildProviderSummary(removed);
-}
-
-async function removeCustomerAccount(customerId) {
-  const users = await getUsers();
-  const index = users.findIndex((candidate) => candidate.id === customerId && candidate.role === 'musteri');
-  if (index === -1) {
-    return null;
-  }
-
-  const [removed] = users.splice(index, 1);
-  await saveUsers(users);
-
-  const requests = await getRequests();
-  const filteredRequests = requests.filter((request) => request.userId !== customerId);
-  if (filteredRequests.length !== requests.length) {
-    await saveRequests(filteredRequests);
-  }
-
-  await removeDirectory(path.join(CUSTOMER_MEDIA_ROOT, customerId));
-  return sanitizeUser(removed);
-}
-
-async function removeRequestItem(requestId) {
-  const requests = await getRequests();
-  const index = requests.findIndex((candidate) => candidate.id === requestId);
-  if (index === -1) {
-    return null;
-  }
-  const [removed] = requests.splice(index, 1);
-  await saveRequests(requests);
-  return removed;
-}
-
-async function removeOfferItem(requestId, offerId) {
-  const requests = await getRequests();
-  const request = requests.find((candidate) => candidate.id === requestId);
-  if (!request || !Array.isArray(request.offers)) {
-    return null;
-  }
-
-  const index = request.offers.findIndex((offer) => offer.id === offerId);
-  if (index === -1) {
-    return null;
-  }
-
-  const [removed] = request.offers.splice(index, 1);
-  if (request.acceptedOfferId === removed.id) {
-    request.acceptedOfferId = null;
-    request.status = 'Teklif Bekleniyor';
-  }
-  await saveRequests(requests);
-  return { request, offer: removed };
-}
-
-function countProviderOffers(requests = []) {
-  return requests.reduce((acc, request) => {
-    if (!Array.isArray(request.offers)) {
-      return acc;
-    }
-    request.offers.forEach((offer) => {
-      if (!offer.providerId) return;
-      acc[offer.providerId] = (acc[offer.providerId] || 0) + 1;
-    });
-    return acc;
-  }, {});
-}
-
-function countCustomerRequests(requests = []) {
-  return requests.reduce((acc, request) => {
-    if (!request.userId) {
-      return acc;
-    }
-    acc[request.userId] = (acc[request.userId] || 0) + 1;
-    return acc;
-  }, {});
-}
-
-async function buildAdminSummary() {
-  const [users, requests] = await Promise.all([getUsers(), getRequests()]);
-  const providerOfferCounts = countProviderOffers(requests);
-  const customerRequestCounts = countCustomerRequests(requests);
-
-  const providers = users
-    .filter((user) => user.role === 'usta')
-    .map((user) => ({
-      ...buildProviderSummary(user),
-      email: user.email,
-      offerCount: providerOfferCounts[user.id] || 0,
-    }));
-
-  const customers = users
-    .filter((user) => user.role === 'musteri')
-    .map((user) => ({
-      id: user.id,
-      email: user.email,
-      profile: user.profile || {},
-      requestCount: customerRequestCounts[user.id] || 0,
-    }));
-
-  const requestsWithProviders = mapRequestsWithProviders(requests, users);
-
-  return {
-    stats: {
-      providerCount: providers.length,
-      customerCount: customers.length,
-      requestCount: requestsWithProviders.length,
-    },
-    providers,
-    customers,
-    requests: requestsWithProviders,
-  };
-}
-
-ensureMediaRoots().catch((error) => {
-  console.error('Medya klasörleri oluşturulamadı:', error);
-});
-
-async function readJson(filePath) {
-  const data = await fs.readFile(filePath, 'utf8');
-  return JSON.parse(data);
-}
-
-async function writeJson(filePath, data) {
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-}
-
-async function getUsers() {
-  return readJson(USERS_FILE);
-}
-
-async function saveUsers(users) {
-  await writeJson(USERS_FILE, users);
-}
-
-async function getRequests() {
-  return readJson(REQUESTS_FILE);
-}
-
-async function saveRequests(requests) {
-  await writeJson(REQUESTS_FILE, requests);
-}
-
-function sanitizeUser(user) {
-  const { passwordHash, ...safeUser } = user;
-  return safeUser;
-}
-
-function buildProviderSummary(user) {
-  const profile = user.profile || {};
-  const reviews = user.reviews || [];
-  const totalRating = reviews.reduce((sum, review) => sum + (review.rating || 0), 0);
-  const rating = reviews.length ? Number((totalRating / reviews.length).toFixed(2)) : 0;
-
-  const firstName = profile.firstName || '';
-  const lastName = profile.lastName || '';
-  const emailName = user.email ? user.email.split('@')[0] : '';
-  let fullName = `${firstName} ${lastName}`.trim();
-  if (!fullName) {
-    fullName = profile.profession || '';
-  }
-  if (!fullName) {
-    fullName = emailName;
-  }
-  if (!fullName) {
-    fullName = 'Trabzon Ustası';
-  }
-
+function buildUserResponse(user, token) {
+  if (!user) return null;
+  const gallery = user.gallery ? JSON.parse(user.gallery) : [];
   return {
     id: user.id,
-    fullName,
-    firstName,
-    lastName,
-    profession: profile.profession || '',
-    category: profile.category || 'Belirtilmedi',
-    city: profile.city || 'Trabzon',
-    district: profile.district || 'Ortahisar',
-    about: profile.about || '',
-    rating,
-    reviewCount: reviews.length,
-    completedJobs: (user.stats && user.stats.completedJobs) || 0,
+    role: user.role,
+    email: user.email,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    profession: user.profession,
+    category: user.category,
+    about: user.about,
+    city: user.city,
+    district: user.district,
     contact: {
-      phone: (profile.contact && profile.contact.phone) || '',
-      email: (profile.contact && profile.contact.email) || user.email,
-      website: (profile.contact && profile.contact.website) || '',
+      phone: user.phone,
+      email: user.contact_email || user.email,
+      website: user.website,
     },
-    avatar: profile.avatar || '',
-    banner: profile.banner || '',
-    gallery: profile.gallery || [],
-    reviews,
+    avatar: user.avatar,
+    banner: user.banner,
+    gallery,
+    rating: user.rating,
+    reviewCount: user.review_count,
+    completedJobs: user.completed_jobs,
+    verified: Boolean(user.verified),
+    token,
   };
 }
 
-function updateProviderStats(users, providerId, feedback) {
-  const provider = users.find((candidate) => candidate.id === providerId && candidate.role === 'usta');
-  if (!provider) {
-    return;
+function requireOwnership(req, res, next) {
+  if (req.user.role === 'admin') return next();
+  const targetId = req.params.id || req.body.userId;
+  if (targetId && req.user.id !== targetId) {
+    return res.status(403).json({ message: 'Bu işlem için yetkiniz yok.' });
   }
-
-  provider.stats = provider.stats || {};
-  provider.stats.completedJobs = (provider.stats.completedJobs || 0) + 1;
-
-  if (feedback && feedback.rating) {
-    provider.reviews = provider.reviews || [];
-    provider.reviews.push({
-      id: uuid(),
-      rating: feedback.rating,
-      comment: feedback.comment || '',
-      customerName: feedback.customerName || 'Müşteri',
-      createdAt: new Date().toISOString(),
-    });
-  }
+  return next();
 }
-
-function matchesQuery(value = '', query = '') {
-  if (!query) {
-    return true;
-  }
-  const normalizedValue = value.toString().toLowerCase();
-  const normalizedQuery = query.toString().toLowerCase();
-  return normalizedValue.includes(normalizedQuery);
-}
-
-app.get('/api/providers', async (req, res) => {
-  try {
-    const users = await getUsers();
-    const { category, q } = req.query;
-    const providers = users
-      .filter((user) => user.role === 'usta')
-      .map(buildProviderSummary)
-      .filter((provider) => {
-        const categoryMatch = !category || provider.category === category;
-        if (!categoryMatch) {
-          return false;
-        }
-        if (!q) {
-          return true;
-        }
-        const haystack = [
-          provider.fullName,
-          provider.profession,
-          provider.category,
-          provider.city,
-          provider.about,
-        ]
-          .filter(Boolean)
-          .join(' ');
-        return matchesQuery(haystack, q);
-      });
-
-    res.json(providers);
-  } catch (error) {
-    res.status(500).json({ message: 'Hizmet sağlayıcıları yüklenemedi.' });
-  }
-});
-
-app.get('/api/providers/:id', async (req, res) => {
-  try {
-    const users = await getUsers();
-    const user = users.find((candidate) => candidate.id === req.params.id && candidate.role === 'usta');
-
-    if (!user) {
-      return res.status(404).json({ message: 'Usta bulunamadı.' });
-    }
-
-    res.json(buildProviderSummary(user));
-  } catch (error) {
-    res.status(500).json({ message: 'Usta bilgileri alınamadı.' });
-  }
-});
-
-app.put('/api/providers/:id', async (req, res) => {
-  try {
-    const users = await getUsers();
-    const user = users.find((candidate) => candidate.id === req.params.id && candidate.role === 'usta');
-
-    if (!user) {
-      return res.status(404).json({ message: 'Usta bulunamadı.' });
-    }
-
-    const {
-      firstName,
-      lastName,
-      profession,
-      city,
-      district,
-      about,
-      category,
-      contact,
-      avatar,
-      banner,
-      gallery,
-    } = req.body;
-
-    user.profile = user.profile || {};
-    if (firstName !== undefined) user.profile.firstName = (firstName || '').trim();
-    if (lastName !== undefined) user.profile.lastName = (lastName || '').trim();
-    if (profession !== undefined) user.profile.profession = (profession || '').trim();
-    if (city !== undefined || district !== undefined) {
-      const location = normalizeLocation(
-        city !== undefined ? city : user.profile.city,
-        district !== undefined ? district : user.profile.district,
-      );
-      user.profile.city = location.city;
-      user.profile.district = location.district;
-    }
-    if (about !== undefined) {
-      if (await containsProfanity(about)) {
-        return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
-      }
-      user.profile.about = about || '';
-    }
-    if (category !== undefined) user.profile.category = (category || '').trim();
-    if (contact !== undefined) {
-      user.profile.contact = {
-        phone: contact?.phone || '',
-        email: contact?.email || user.email,
-        website: contact?.website || '',
-      };
-    }
-
-    const providerBaseDir = path.join(PROVIDER_MEDIA_ROOT, user.id);
-    const avatarDir = path.join(providerBaseDir, 'avatar');
-    const bannerDir = path.join(providerBaseDir, 'banner');
-    const galleryDir = path.join(providerBaseDir, 'gallery');
-
-    const previousAvatar = user.profile.avatar || '';
-    const previousBanner = user.profile.banner || '';
-    const previousGallery = Array.isArray(user.profile.gallery) ? [...user.profile.gallery] : [];
-
-    if (avatar !== undefined) {
-      if (!avatar) {
-        await removeFile(previousAvatar);
-        user.profile.avatar = '';
-      } else {
-        const storedAvatar = await saveDataUrlToFile(avatar, avatarDir, 'avatar');
-        if (storedAvatar !== previousAvatar) {
-          await removeFile(previousAvatar);
-        }
-        user.profile.avatar = storedAvatar;
-      }
-    }
-
-    if (banner !== undefined) {
-      if (!banner) {
-        await removeFile(previousBanner);
-        user.profile.banner = '';
-      } else {
-        const storedBanner = await saveDataUrlToFile(banner, bannerDir, 'banner');
-        if (storedBanner !== previousBanner) {
-          await removeFile(previousBanner);
-        }
-        user.profile.banner = storedBanner;
-      }
-    }
-
-    if (Array.isArray(gallery)) {
-      const normalizedGallery = [];
-      for (const item of gallery) {
-        if (!item) {
-          continue;
-        }
-        if (isDataUrl(item)) {
-          // eslint-disable-next-line no-await-in-loop
-          const stored = await saveDataUrlToFile(item, galleryDir, 'gallery');
-          normalizedGallery.push(stored);
-        } else {
-          normalizedGallery.push(item);
-        }
-      }
-      const removed = previousGallery.filter((existing) => !normalizedGallery.includes(existing));
-      await Promise.all(removed.map((file) => removeFile(file)));
-      user.profile.gallery = normalizedGallery;
-    }
-
-    await saveUsers(users);
-    res.json(buildProviderSummary(user));
-  } catch (error) {
-    res.status(500).json({ message: 'Usta bilgileri güncellenemedi.' });
-  }
-});
-
-app.get('/api/categories', async (_req, res) => {
-  try {
-    const users = await getUsers();
-    const providers = users.filter((user) => user.role === 'usta');
-    const categories = Array.from(new Set(providers.map((provider) => provider.profile.category || 'Belirtilmedi')))
-      .filter(Boolean)
-      .map((name) => ({
-        name,
-        providerCount: providers.filter((provider) => (provider.profile.category || 'Belirtilmedi') === name).length,
-      }));
-
-    res.json(categories);
-  } catch (error) {
-    res.status(500).json({ message: 'Kategoriler yüklenemedi.' });
-  }
-});
 
 app.get('/api/locations', (_req, res) => {
   res.json(REGIONS);
 });
 
-app.get('/api/customers/:id', async (req, res) => {
-  try {
-    const users = await getUsers();
-    const user = users.find((candidate) => candidate.id === req.params.id && candidate.role === 'musteri');
-
-    if (!user) {
-      return res.status(404).json({ message: 'Müşteri bulunamadı.' });
-    }
-
-    res.json(sanitizeUser(user));
-  } catch (error) {
-    res.status(500).json({ message: 'Müşteri bilgileri alınamadı.' });
-  }
+app.get('/api/categories', (_req, res) => {
+  res.json(['Boya', 'Nakliyat', 'Temizlik', 'Tadilat', 'Elektrik', 'Marangoz', 'Beyaz Eşya', 'Özel Ders']);
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const users = await getUsers();
-    const user = users.find((candidate) => candidate.id === req.params.id && candidate.role === 'musteri');
-
-    if (!user) {
-      return res.status(404).json({ message: 'Müşteri bulunamadı.' });
-    }
-
-    const { firstName, lastName, city, district, email, phone, avatar } = req.body;
-    user.profile = user.profile || {};
-
-    if (firstName !== undefined) user.profile.firstName = firstName;
-    if (lastName !== undefined) user.profile.lastName = lastName;
-    if (city !== undefined || district !== undefined) {
-      const location = normalizeLocation(
-        city !== undefined ? city : user.profile.city,
-        district !== undefined ? district : user.profile.district,
-      );
-      user.profile.city = location.city;
-      user.profile.district = location.district;
-    }
-    if (email !== undefined) user.profile.email = email;
-    if (phone !== undefined) user.profile.phone = phone;
-    const customerBaseDir = path.join(CUSTOMER_MEDIA_ROOT, user.id);
-    const avatarDir = path.join(customerBaseDir, 'avatar');
-    const previousAvatar = user.profile.avatar || '';
-
-    if (avatar !== undefined) {
-      if (!avatar) {
-        await removeFile(previousAvatar);
-        user.profile.avatar = '';
-      } else {
-        const storedAvatar = await saveDataUrlToFile(avatar, avatarDir, 'avatar');
-        if (storedAvatar !== previousAvatar) {
-          await removeFile(previousAvatar);
-        }
-        user.profile.avatar = storedAvatar;
-      }
-    }
-
-    await saveUsers(users);
-    res.json(sanitizeUser(user));
-  } catch (error) {
-    res.status(500).json({ message: 'Müşteri bilgileri güncellenemedi.' });
-  }
-});
-
-function mapOffersWithProvider(offers = [], users = []) {
-  return offers.map((offer) => {
-    const provider = users.find((candidate) => candidate.id === offer.providerId && candidate.role === 'usta');
-    const providerSummary = provider ? buildProviderSummary(provider) : null;
-    return {
-      ...offer,
-      provider: providerSummary
-        ? {
-            id: providerSummary.id,
-            fullName: providerSummary.fullName,
-            profession: providerSummary.profession,
-            city: providerSummary.city,
-            district: providerSummary.district,
-            avatar: providerSummary.avatar,
-            contact: providerSummary.contact,
-          }
-        : {
-            id: offer.providerId,
-            fullName: offer.providerName || 'Usta',
-            city: offer.providerCity || '',
-            district: offer.providerDistrict || '',
-          },
-    };
-  });
-}
-
-function mapRequestsWithProviders(requests = [], users = []) {
-  return requests.map((request) => ({
-    ...request,
-    offers: mapOffersWithProvider(request.offers || [], users),
-  }));
-}
-
-app.get('/api/requests', async (_req, res) => {
-  try {
-    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
-    res.json(mapRequestsWithProviders(requests, users));
-  } catch (error) {
-    res.status(500).json({ message: 'Talepler yüklenemedi.' });
-  }
-});
-
-app.get('/api/requests/customer/:customerId', async (req, res) => {
-  try {
-    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
-    const filtered = requests.filter((request) => request.userId === req.params.customerId);
-    res.json(mapRequestsWithProviders(filtered, users));
-  } catch (error) {
-    res.status(500).json({ message: 'Müşteri talepleri yüklenemedi.' });
-  }
-});
-
-app.get('/api/requests/provider/:providerId', async (req, res) => {
-  try {
-    const [requests, users] = await Promise.all([readJson(REQUESTS_FILE), getUsers()]);
-    const filtered = requests.filter((request) => {
-      if (!Array.isArray(request.offers)) {
-        return false;
-      }
-      return request.offers.some((offer) => offer.providerId === req.params.providerId);
-    });
-    res.json(mapRequestsWithProviders(filtered, users));
-  } catch (error) {
-    res.status(500).json({ message: 'Usta teklifleri yüklenemedi.' });
-  }
-});
-
-app.post('/api/requests', async (req, res) => {
-  const { userId, category, description } = req.body;
-  if (!userId || !category || !description) {
-    return res.status(400).json({ message: 'Tüm alanları doldurun.' });
-  }
-
-  try {
-    const users = await getUsers();
-    const customer = users.find((user) => user.id === userId && user.role === 'musteri');
-
-    if (!customer) {
-      return res.status(400).json({ message: 'Talep oluşturmak için müşteri hesabı gerekir.' });
-    }
-
-    if (await containsProfanity(description) || (await containsProfanity(category))) {
-      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
-    }
-
-    const requests = await readJson(REQUESTS_FILE);
-    const location = normalizeLocation(customer.profile?.city, customer.profile?.district);
-    const newRequest = {
-      id: uuid(),
-      userId,
-      category,
-      description,
-      status: 'Teklif Bekleniyor',
-      createdAt: new Date().toISOString(),
-      city: location.city,
-      district: location.district,
-      offers: [],
-    };
-    requests.unshift(newRequest);
-    await writeJson(REQUESTS_FILE, requests);
-    res.status(201).json(newRequest);
-  } catch (error) {
-    res.status(500).json({ message: 'Talep oluşturulamadı.' });
-  }
-});
-
-app.post('/api/requests/:requestId/offers', async (req, res) => {
-  const { providerId, message, price } = req.body;
-
-  if (!providerId || !message || !price) {
-    return res.status(400).json({ message: 'Tüm alanları doldurun.' });
-  }
-
-  try {
-    const users = await getUsers();
-    const provider = users.find((user) => user.id === providerId && user.role === 'usta');
-    if (!provider) {
-      return res.status(400).json({ message: 'Teklif göndermek için usta hesabı gerekir.' });
-    }
-
-    if (await containsProfanity(message)) {
-      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
-    }
-
-    const requests = await readJson(REQUESTS_FILE);
-    const request = requests.find((candidate) => candidate.id === req.params.requestId);
-
-    if (!request) {
-      return res.status(404).json({ message: 'Talep bulunamadı.' });
-    }
-
-    request.offers = request.offers || [];
-    const providerSummary = buildProviderSummary(provider);
-    const offer = {
-      id: uuid(),
-      providerId,
-      providerName: providerSummary.fullName,
-      providerProfession: providerSummary.profession,
-      providerCity: providerSummary.city,
-      providerDistrict: providerSummary.district,
-      message,
-      price,
-      status: 'Beklemede',
-      createdAt: new Date().toISOString(),
-    };
-    request.offers.push(offer);
-
-    await writeJson(REQUESTS_FILE, requests);
-    res.status(201).json(offer);
-  } catch (error) {
-    res.status(500).json({ message: 'Teklif gönderilemedi.' });
-  }
-});
-
-app.post('/api/requests/:requestId/offers/:offerId/accept', async (req, res) => {
-  const { customerId, rating, comment } = req.body;
-
-  if (!customerId) {
-    return res.status(400).json({ message: 'Müşteri bilgisi eksik.' });
-  }
-
-  try {
-    const users = await getUsers();
-    const requests = await readJson(REQUESTS_FILE);
-    const request = requests.find((candidate) => candidate.id === req.params.requestId);
-
-    if (!request) {
-      return res.status(404).json({ message: 'Talep bulunamadı.' });
-    }
-
-    if (request.userId !== customerId) {
-      return res.status(403).json({ message: 'Bu talep size ait değil.' });
-    }
-
-    if (!Array.isArray(request.offers)) {
-      return res.status(400).json({ message: 'Bu talep için teklif bulunmuyor.' });
-    }
-
-    const offer = request.offers.find((candidate) => candidate.id === req.params.offerId);
-    if (!offer) {
-      return res.status(404).json({ message: 'Teklif bulunamadı.' });
-    }
-
-    if (comment && (await containsProfanity(comment))) {
-      return res.status(400).json({ message: 'Metin uygunsuz ifadeler içeriyor.' });
-    }
-
-    request.offers = request.offers.map((candidate) => ({
-      ...candidate,
-      status: candidate.id === offer.id ? 'Kabul Edildi' : 'Reddedildi',
-    }));
-    request.status = 'Teklif Kabul Edildi';
-    request.acceptedOfferId = offer.id;
-
-    await writeJson(REQUESTS_FILE, requests);
-
-    const customer = users.find((candidate) => candidate.id === customerId);
-    const feedback = rating
-      ? {
-          rating: Number(rating),
-          comment,
-          customerName: customer
-            ? `${customer.profile.firstName || ''} ${customer.profile.lastName || ''}`.trim() || customer.email
-            : 'Müşteri',
-        }
-      : null;
-
-    updateProviderStats(users, offer.providerId, feedback);
-    await saveUsers(users);
-
-    res.json({ message: 'Teklif kabul edildi.', request });
-  } catch (error) {
-    res.status(500).json({ message: 'Teklif kabul edilemedi.' });
-  }
-});
-
-app.post('/api/auth/register', async (req, res) => {
-  const {
-    firstName,
-    lastName,
-    email,
-    password,
-    role,
-    profession,
-    city: cityInput,
-    district: districtInput,
-    category,
-  } = req.body;
-
-  if (!firstName || !lastName || !email || !password || !role) {
-    return res.status(400).json({ message: 'Lütfen tüm alanları doldurun.' });
-  }
-
-  if (!['usta', 'musteri'].includes(role)) {
-    return res.status(400).json({ message: 'Geçersiz rol seçimi.' });
-  }
-
-  try {
-    const users = await getUsers();
-    const existing = users.find((user) => user.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      return res.status(409).json({ message: 'Bu e-posta ile kayıtlı bir kullanıcı zaten mevcut.' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const id = uuid();
-    const location = normalizeLocation(cityInput, districtInput);
-    const profileBase = {
+    const {
       firstName,
       lastName,
-      city: location.city,
-      district: location.district,
-      avatar: '',
-    };
-
-    const newUser = {
-      id,
-      role,
       email,
-      passwordHash,
-      profile: {
-        ...profileBase,
-        ...(role === 'usta'
-          ? {
-              profession: profession || '',
-              about: '',
-              category: category || '',
-              banner: '',
-              gallery: [],
-              contact: {
-                phone: '',
-                email,
-                website: '',
-              },
-            }
-          : {
-              email,
-              phone: '',
-            }),
-      },
-    };
+      password,
+      role,
+      profession,
+      category,
+      city,
+      district,
+    } = req.body || {};
 
-    if (role === 'usta') {
-      newUser.stats = { completedJobs: 0 };
-      newUser.reviews = [];
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ message: 'Geçerli bir e-posta girin.' });
+    }
+    if (!validatePasswordComplexity(password)) {
+      return res.status(400).json({ message: 'Şifre en az 8 karakter, büyük/küçük harf, rakam ve özel karakter içermelidir.' });
+    }
+    if (!['usta', 'musteri'].includes(role)) {
+      return res.status(400).json({ message: 'Geçersiz rol.' });
     }
 
-    users.push(newUser);
-    await saveUsers(users);
+    const existing = await get(db, 'SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (existing) {
+      return res.status(409).json({ message: 'Bu e-posta ile bir hesap zaten var.' });
+    }
 
-    res.status(201).json({
-      message: 'Kayıt başarılı.',
-      user: sanitizeUser(newUser),
-    });
+    const verificationCode = uuid();
+    const hashed = await hashPassword(password);
+    const location = normalizeLocation(city, district);
+
+    const userId = uuid();
+    await run(
+      db,
+      `INSERT INTO users (id, role, email, password_hash, first_name, last_name, profession, category, about, city, district, verification_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        userId,
+        role,
+        email.toLowerCase(),
+        hashed,
+        sanitizeText(firstName),
+        sanitizeText(lastName),
+        sanitizeText(profession),
+        sanitizeText(category),
+        '',
+        location.city,
+        location.district,
+        verificationCode,
+      ],
+    );
+
+    res.json({ message: 'Kayıt oluşturuldu. E-posta doğrulaması gerekiyor.', verificationCode, userId });
   } catch (error) {
-    res.status(500).json({ message: 'Kayıt sırasında bir sorun oluştu.' });
+    next(error);
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: 'E-posta ve şifre gereklidir.' });
-  }
-
+app.post('/api/auth/verify', async (req, res, next) => {
   try {
-    const adminEmail = await authenticateAdminCredentials(email, password);
-    if (adminEmail) {
-      const token = createAdminSession(adminEmail);
+    const { email, code } = req.body || {};
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Doğrulama bilgileri eksik.' });
+    }
+    const user = await get(db, 'SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (!user || user.verification_code !== code) {
+      return res.status(400).json({ message: 'Doğrulama kodu hatalı.' });
+    }
+    await run(db, 'UPDATE users SET verified = 1, verification_code = NULL WHERE id = ?', [user.id]);
+    const token = createToken({ sub: user.id, role: user.role, email: user.email });
+    const payload = buildUserResponse({ ...user, verified: 1 }, token);
+    res.json({ message: 'E-posta doğrulandı.', user: payload });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ message: 'E-posta ve şifre gereklidir.' });
+    }
+
+    if (ADMIN_EMAIL && ADMIN_PASSWORD && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      const ok = ADMIN_PASSWORD_HASH
+        ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH)
+        : password === ADMIN_PASSWORD;
+      if (!ok) {
+        return res.status(401).json({ message: 'Geçersiz bilgiler.' });
+      }
+      const token = createToken({ sub: 'admin', role: 'admin', email: ADMIN_EMAIL });
       return res.json({
         message: 'Giriş başarılı.',
-        user: {
-          id: 'admin',
-          role: 'admin',
-          email: adminEmail,
-          token,
-          profile: {
-            firstName: 'Yönetici',
-            lastName: '',
-            city: 'Trabzon',
-            district: 'Merkez',
-          },
-        },
+        user: { id: 'admin', role: 'admin', email: ADMIN_EMAIL, token },
       });
     }
 
-    const normalizedEmail = email.toLowerCase();
-    const users = await getUsers();
-    const user = users.find((candidate) => candidate.email.toLowerCase() === normalizedEmail);
-
+    const user = await get(db, 'SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
     if (!user) {
-      return res.status(401).json({ message: 'E-posta veya şifre hatalı.' });
+      return res.status(401).json({ message: 'Geçersiz bilgiler.' });
     }
-
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
-      return res.status(401).json({ message: 'E-posta veya şifre hatalı.' });
+    if (!user.verified) {
+      return res.status(403).json({ message: 'E-posta doğrulaması yapılmadı.' });
     }
-
-    res.json({
-      message: 'Giriş başarılı.',
-      user: sanitizeUser(user),
-    });
+    const ok = await comparePassword(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ message: 'Geçersiz bilgiler.' });
+    }
+    const token = createToken({ sub: user.id, role: user.role, email: user.email });
+    const payload = buildUserResponse(user, token);
+    res.json({ message: 'Giriş başarılı.', user: payload });
   } catch (error) {
-    res.status(500).json({ message: 'Giriş sırasında bir sorun oluştu.' });
+    next(error);
   }
 });
 
-const adminRouter = express.Router();
-
-adminRouter.use(requireAdmin);
-
-adminRouter.get('/summary', async (_req, res) => {
+app.get('/api/providers', async (req, res, next) => {
   try {
-    const summary = await buildAdminSummary();
-    res.json(summary);
+    const query = normalizeText(req.query.q || '');
+    const rows = await all(db, 'SELECT * FROM users WHERE role = "usta"');
+    const providers = rows
+      .map((row) => buildUserResponse(row))
+      .filter((provider) => {
+        if (!query) return true;
+        const haystack = normalizeText(`${provider.firstName} ${provider.lastName} ${provider.profession} ${provider.category} ${provider.city} ${provider.district}`);
+        return haystack.includes(query);
+      });
+    res.json(providers);
   } catch (error) {
-    res.status(500).json({ message: 'Yönetici verileri yüklenemedi.' });
+    next(error);
   }
 });
 
-adminRouter.delete('/providers/:id', async (req, res) => {
+app.get('/api/providers/:id', async (req, res, next) => {
   try {
-    const provider = await removeProviderAccount(req.params.id);
-    if (!provider) {
+    const provider = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!provider || provider.role !== 'usta') {
       return res.status(404).json({ message: 'Usta bulunamadı.' });
     }
-    const summary = await buildAdminSummary();
-    return res.json({ message: 'Usta kaldırıldı.', provider, summary });
+    res.json(buildUserResponse(provider));
   } catch (error) {
-    return res.status(500).json({ message: 'Usta silinemedi.' });
+    next(error);
   }
 });
 
-adminRouter.delete('/customers/:id', async (req, res) => {
+app.put('/api/providers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
-    const customer = await removeCustomerAccount(req.params.id);
-    if (!customer) {
+    const provider = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!provider || provider.role !== 'usta') {
+      return res.status(404).json({ message: 'Usta bulunamadı.' });
+    }
+
+    const updates = { ...provider };
+    if (req.body.firstName !== undefined) updates.first_name = sanitizeText(req.body.firstName);
+    if (req.body.lastName !== undefined) updates.last_name = sanitizeText(req.body.lastName);
+    if (req.body.profession !== undefined) updates.profession = sanitizeText(req.body.profession);
+    if (req.body.category !== undefined) updates.category = sanitizeText(req.body.category);
+    if (req.body.about !== undefined) updates.about = sanitizeText(req.body.about);
+
+    if (req.body.city || req.body.district) {
+      const location = normalizeLocation(req.body.city || provider.city, req.body.district || provider.district);
+      updates.city = location.city;
+      updates.district = location.district;
+    }
+
+    if (req.body.contact) {
+      updates.phone = sanitizeText(req.body.contact.phone);
+      updates.contact_email = sanitizeText(req.body.contact.email || provider.email);
+      updates.website = sanitizeText(req.body.contact.website);
+    }
+
+    const providerDir = path.join(PROVIDER_MEDIA_ROOT, provider.id);
+    if (req.body.avatar !== undefined) {
+      if (!req.body.avatar) {
+        await removeFile(provider.avatar);
+        updates.avatar = '';
+      } else {
+        const avatar = await saveMedia(req.body.avatar, path.join(providerDir, 'avatar'));
+        await removeFile(provider.avatar);
+        updates.avatar = avatar;
+      }
+    }
+
+    if (req.body.banner !== undefined) {
+      if (!req.body.banner) {
+        await removeFile(provider.banner);
+        updates.banner = '';
+      } else {
+        const banner = await saveMedia(req.body.banner, path.join(providerDir, 'banner'));
+        await removeFile(provider.banner);
+        updates.banner = banner;
+      }
+    }
+
+    if (req.body.gallery) {
+      const items = Array.isArray(req.body.gallery) ? req.body.gallery : [];
+      const nextGallery = [];
+      for (const item of items) {
+        // eslint-disable-next-line no-await-in-loop
+        const stored = await saveMedia(item, path.join(providerDir, 'gallery'));
+        nextGallery.push(stored);
+      }
+      const oldGallery = provider.gallery ? JSON.parse(provider.gallery) : [];
+      for (const file of oldGallery) {
+        if (!nextGallery.includes(file)) {
+          // eslint-disable-next-line no-await-in-loop
+          await removeFile(file);
+        }
+      }
+      updates.gallery = JSON.stringify(nextGallery);
+    }
+
+    await run(
+      db,
+      `UPDATE users SET first_name=?, last_name=?, profession=?, category=?, about=?, city=?, district=?, phone=?, contact_email=?, website=?, avatar=?, banner=?, gallery=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      [
+        updates.first_name,
+        updates.last_name,
+        updates.profession,
+        updates.category,
+        updates.about,
+        updates.city,
+        updates.district,
+        updates.phone,
+        updates.contact_email,
+        updates.website,
+        updates.avatar,
+        updates.banner,
+        updates.gallery,
+        provider.id,
+      ],
+    );
+
+    const refreshed = await get(db, 'SELECT * FROM users WHERE id = ?', [provider.id]);
+    res.json(buildUserResponse(refreshed));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+  try {
+    const user = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user || user.role !== 'musteri') {
       return res.status(404).json({ message: 'Müşteri bulunamadı.' });
     }
-    const summary = await buildAdminSummary();
-    return res.json({ message: 'Müşteri kaldırıldı.', customer, summary });
+    res.json(buildUserResponse(user));
   } catch (error) {
-    return res.status(500).json({ message: 'Müşteri silinemedi.' });
+    next(error);
   }
 });
 
-adminRouter.delete('/requests/:id', async (req, res) => {
+app.put('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
-    const removed = await removeRequestItem(req.params.id);
-    if (!removed) {
+    const user = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user || user.role !== 'musteri') {
+      return res.status(404).json({ message: 'Müşteri bulunamadı.' });
+    }
+
+    const updates = { ...user };
+    if (req.body.profile) {
+      updates.first_name = sanitizeText(req.body.profile.firstName);
+      updates.last_name = sanitizeText(req.body.profile.lastName);
+      updates.about = sanitizeText(req.body.profile.about);
+    }
+    if (req.body.city || req.body.district) {
+      const location = normalizeLocation(req.body.city || user.city, req.body.district || user.district);
+      updates.city = location.city;
+      updates.district = location.district;
+    }
+    if (req.body.email && validateEmail(req.body.email)) {
+      updates.email = sanitizeText(req.body.email.toLowerCase());
+    }
+    if (req.body.phone) {
+      updates.phone = sanitizeText(req.body.phone);
+    }
+
+    const customerDir = path.join(CUSTOMER_MEDIA_ROOT, user.id, 'avatar');
+    if (req.body.avatar !== undefined) {
+      if (!req.body.avatar) {
+        await removeFile(user.avatar);
+        updates.avatar = '';
+      } else {
+        const avatar = await saveMedia(req.body.avatar, customerDir);
+        await removeFile(user.avatar);
+        updates.avatar = avatar;
+      }
+    }
+
+    await run(
+      db,
+      'UPDATE users SET first_name=?, last_name=?, about=?, city=?, district=?, email=?, phone=?, avatar=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [updates.first_name, updates.last_name, updates.about, updates.city, updates.district, updates.email, updates.phone, updates.avatar, user.id],
+    );
+
+    const refreshed = await get(db, 'SELECT * FROM users WHERE id = ?', [user.id]);
+    res.json(buildUserResponse(refreshed));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/requests', authMiddleware(db), async (_req, res, next) => {
+  try {
+    const requests = await all(db, 'SELECT * FROM requests WHERE status != "Kapalı"');
+    const enriched = await Promise.all(
+      requests.map(async (reqItem) => ({
+        ...serializeRequest(reqItem),
+        offers: await loadOffers(reqItem.id),
+      })),
+    );
+    res.json(enriched);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/requests/customer/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+  try {
+    const requests = await all(db, 'SELECT * FROM requests WHERE customer_id = ?', [req.params.id]);
+    const enriched = await Promise.all(
+      requests.map(async (reqItem) => ({
+        ...serializeRequest(reqItem),
+        offers: await loadOffers(reqItem.id),
+      })),
+    );
+    res.json(enriched);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/requests/provider/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+  try {
+    const offers = await all(db, 'SELECT DISTINCT request_id FROM offers WHERE provider_id = ?', [req.params.id]);
+    const requestIds = offers.map((entry) => entry.request_id);
+    if (!requestIds.length) return res.json([]);
+    const placeholders = requestIds.map(() => '?').join(',');
+    const requests = await all(db, `SELECT * FROM requests WHERE id IN (${placeholders})`, requestIds);
+    const enriched = await Promise.all(
+      requests.map(async (reqItem) => ({
+        ...serializeRequest(reqItem),
+        offers: await loadOffers(reqItem.id),
+      })),
+    );
+    res.json(enriched);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/requests', authMiddleware(db), requireOwnership, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'musteri') {
+      return res.status(403).json({ message: 'Sadece müşteriler talep oluşturabilir.' });
+    }
+    const { category, description, city, district } = req.body || {};
+    if (!category || !description) {
+      return res.status(400).json({ message: 'Kategori ve açıklama zorunludur.' });
+    }
+    if (await hasProfanity(description)) {
+      return res.status(400).json({ message: 'İçerik uygunsuz kelimeler içeriyor.' });
+    }
+    const location = normalizeLocation(city || req.user.city, district || req.user.district);
+    const id = uuid();
+    await run(db, 'INSERT INTO requests (id, customer_id, title, category, description, city, district) VALUES (?,?,?,?,?,?,?)', [
+      id,
+      req.user.id,
+      sanitizeText(category),
+      sanitizeText(category),
+      sanitizeText(description),
+      location.city,
+      location.district,
+    ]);
+    const created = await get(db, 'SELECT * FROM requests WHERE id = ?', [id]);
+    res.status(201).json(serializeRequest(created));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/requests/:id/offers', authMiddleware(db), async (req, res, next) => {
+  try {
+    if (req.user.role !== 'usta') {
+      return res.status(403).json({ message: 'Sadece ustalar teklif verebilir.' });
+    }
+    const request = await get(db, 'SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!request) {
       return res.status(404).json({ message: 'Talep bulunamadı.' });
     }
-    const summary = await buildAdminSummary();
-    return res.json({ message: 'Talep kaldırıldı.', request: removed, summary });
+    const { message, price } = req.body || {};
+    if (!message || Number.isNaN(Number(price))) {
+      return res.status(400).json({ message: 'Mesaj ve fiyat zorunludur.' });
+    }
+    if (await hasProfanity(message)) {
+      return res.status(400).json({ message: 'Teklif metni uygunsuz içerik barındırıyor.' });
+    }
+    const id = uuid();
+    await run(db, 'INSERT INTO offers (id, request_id, provider_id, message, price) VALUES (?,?,?,?,?)', [
+      id,
+      request.id,
+      req.user.id,
+      sanitizeText(message),
+      Number(price),
+    ]);
+    res.status(201).json({ message: 'Teklif kaydedildi.' });
   } catch (error) {
-    return res.status(500).json({ message: 'Talep silinemedi.' });
+    next(error);
   }
 });
 
-adminRouter.delete('/requests/:requestId/offers/:offerId', async (req, res) => {
+app.post('/api/requests/:id/offers/:offerId/accept', authMiddleware(db), async (req, res, next) => {
   try {
-    const removed = await removeOfferItem(req.params.requestId, req.params.offerId);
-    if (!removed) {
+    const request = await get(db, 'SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!request) return res.status(404).json({ message: 'Talep bulunamadı.' });
+    if (request.customer_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Bu işlem için yetkiniz yok.' });
+    }
+    const offer = await get(db, 'SELECT * FROM offers WHERE id = ?', [req.params.offerId]);
+    if (!offer || offer.request_id !== request.id) {
       return res.status(404).json({ message: 'Teklif bulunamadı.' });
     }
-    const summary = await buildAdminSummary();
-    return res.json({ message: 'Teklif kaldırıldı.', summary });
+    await run(db, 'UPDATE offers SET status = "accepted" WHERE id = ?', [offer.id]);
+    await run(db, 'UPDATE requests SET status = "Teklif Kabul Edildi", accepted_offer_id = ? WHERE id = ?', [offer.id, request.id]);
+    res.json({ message: 'Teklif kabul edildi.' });
   } catch (error) {
-    return res.status(500).json({ message: 'Teklif silinemedi.' });
+    next(error);
   }
 });
 
-app.use('/api/admin', adminRouter);
-
-app.use((req, res) => {
-  res.status(404).json({ message: 'Bulunamadı' });
+app.get('/api/admin/summary', authMiddleware(db, { role: 'admin' }), async (_req, res, next) => {
+  try {
+    const [userCountRow] = await all(db, 'SELECT COUNT(*) as count FROM users');
+    const [providerCountRow] = await all(db, "SELECT COUNT(*) as count FROM users WHERE role='usta'");
+    const [customerCountRow] = await all(db, "SELECT COUNT(*) as count FROM users WHERE role='musteri'");
+    const [requestCountRow] = await all(db, 'SELECT COUNT(*) as count FROM requests');
+    res.json({
+      users: userCountRow.count,
+      providers: providerCountRow.count,
+      customers: customerCountRow.count,
+      requests: requestCountRow.count,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`TrabzonIsBul sunucusu ${PORT} portunda çalışıyor.`);
+app.delete('/api/admin/providers/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+  try {
+    await run(db, 'DELETE FROM users WHERE id = ? AND role = "usta"', [req.params.id]);
+    res.json({ message: 'Usta silindi.' });
+  } catch (error) {
+    next(error);
+  }
 });
+
+app.delete('/api/admin/customers/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+  try {
+    await run(db, 'DELETE FROM users WHERE id = ? AND role = "musteri"', [req.params.id]);
+    res.json({ message: 'Müşteri silindi.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/requests/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+  try {
+    await run(db, 'DELETE FROM requests WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Talep silindi.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/requests/:requestId/offers/:offerId', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+  try {
+    await run(db, 'DELETE FROM offers WHERE id = ? AND request_id = ?', [req.params.offerId, req.params.requestId]);
+    res.json({ message: 'Teklif silindi.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+function serializeRequest(request) {
+  return {
+    id: request.id,
+    customerId: request.customer_id,
+    category: request.category,
+    description: request.description,
+    city: request.city,
+    district: request.district,
+    status: request.status,
+    createdAt: request.created_at,
+    acceptedOfferId: request.accepted_offer_id,
+  };
+}
+
+async function loadOffers(requestId) {
+  const offers = await all(db, 'SELECT * FROM offers WHERE request_id = ?', [requestId]);
+  const providerIds = offers.map((offer) => offer.provider_id);
+  const providers = providerIds.length
+    ? await all(db, `SELECT * FROM users WHERE id IN (${providerIds.map(() => '?').join(',')})`, providerIds)
+    : [];
+  const providerMap = providers.reduce((acc, provider) => ({ ...acc, [provider.id]: provider }), {});
+  return offers.map((offer) => ({
+    id: offer.id,
+    requestId: offer.request_id,
+    providerId: offer.provider_id,
+    message: offer.message,
+    price: offer.price,
+    status: offer.status,
+    createdAt: offer.created_at,
+    provider: providerMap[offer.provider_id] ? buildUserResponse(providerMap[offer.provider_id]) : undefined,
+  }));
+}
+
+app.use(errorHandler);
+
+ensureMediaRoots()
+  .then(() => {
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error('Başlatma hatası', error);
+    process.exit(1);
+  });

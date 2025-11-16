@@ -134,7 +134,8 @@ profileForm?.addEventListener('submit', async (event) => {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    setSession(updated);
+    const nextSession = { ...session, ...updated, token: session.token };
+    setSession(nextSession);
     session.profile = updated.profile || session.profile;
     if (updated.email) {
       session.email = updated.email;

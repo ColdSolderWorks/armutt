@@ -88,7 +88,7 @@ export async function apiRequest(path, options = {}) {
     ...options,
   };
   const session = getSession();
-  if (session?.role === 'admin' && session?.token) {
+  if (session?.token) {
     config.headers = { ...config.headers, Authorization: `Bearer ${session.token}` };
   }
   const response = await fetch(path, config);
