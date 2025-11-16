@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrabzonİşBul | Karadeniz'in Hizmet Pazaryeri</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/login.html">Giriş Yap</a></li>
+            <li><a href="/providers.html">Ustalar</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+            <li><a href="/register.html" class="pill-link">Kayıt Ol</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero hero-split">
+        <div class="hero-copy">
+          <span class="eyebrow">Karadeniz'in dijital hizmet pazaryeri</span>
+          <h1>Trabzon'un en güvenilir ustalarını dakikalar içinde keşfedin</h1>
+          <p>
+            TrabzonİşBul; boya, nakliyat, temizlik, tadilat ve daha fazlası için profesyonel
+            ustaları bir araya getirir. Uygun ustayı bulun, profiline göz atın ve tek tıkla
+            iletişime geçin.
+          </p>
+          <form id="home-search" class="search-bar" role="search">
+            <input
+              type="search"
+              name="query"
+              id="home-query"
+              placeholder="Aradığınız hizmeti veya ustayı yazın..."
+              aria-label="Usta ara"
+              autocomplete="off"
+            />
+            <button type="submit" class="button button-primary">Usta Bul</button>
+          </form>
+          <div class="hero-actions">
+            <a class="button button-outline" href="/providers.html">Tüm Ustaları Gör</a>
+            <a class="button button-ghost" href="/register.html">Usta Olarak Katıl</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="hero-card">
+            <div class="hero-card-avatar"></div>
+            <div>
+              <strong>Caner Usta</strong>
+              <span>Boya &amp; Dekorasyon</span>
+            </div>
+          </div>
+          <div class="hero-card hero-card-alt">
+            <div class="hero-card-avatar"></div>
+            <div>
+              <strong>Melisa Usta</strong>
+              <span>Temizlik Hizmetleri</span>
+            </div>
+          </div>
+          <div class="glow"></div>
+        </div>
+      </section>
+
+      <section class="stats">
+        <article>
+          <strong id="stat-provider-count">0</strong>
+          <span>Aktif Usta</span>
+        </article>
+        <article>
+          <strong>5 dk</strong>
+          <span>Ortalama teklif süresi</span>
+        </article>
+        <article>
+          <strong>%98</strong>
+          <span>Memnuniyet oranı hedefi</span>
+        </article>
+      </section>
+
+      <section class="card home-providers">
+        <header class="section-header">
+          <div>
+            <h2>Kayıtlı Ustalar</h2>
+            <p>Şehrinizde hizmet veren öne çıkan ustaları keşfedin.</p>
+          </div>
+          <a class="button button-secondary" href="/providers.html">Tümünü Gör</a>
+        </header>
+        <div id="home-provider-grid" class="provider-grid" aria-live="polite"></div>
+        <div id="home-empty" class="empty-state" hidden>
+          Aradığınız kriterlere uygun usta bulunamadı. Farklı bir arama deneyin.
+        </div>
+      </section>
+
+      <section class="card how-it-works">
+        <h2>TrabzonİşBul nasıl çalışır?</h2>
+        <ol class="steps">
+          <li>
+            <span class="step-index">1</span>
+            <div>
+              <h3>Kaydolun ve rolünüzü seçin</h3>
+              <p>Usta ya da müşteri olarak katılın ve birkaç adımda profilinizi oluşturun.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-index">2</span>
+            <div>
+              <h3>Profilinizi Facebook stili düzenleyin</h3>
+              <p>
+                Kapak görseli, profil fotoğrafı ve tamamlanan işleri paylaşarak güven oluşturun.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-index">3</span>
+            <div>
+              <h3>Teklif alın veya teklif verin</h3>
+              <p>
+                Müşteriler taleplerini paylaşır, ustalar fiyat tekliflerini iletir ve anlaşma
+                sağlanır.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="cta card">
+        <div>
+          <h2>TrabzonİşBul topluluğuna katılın</h2>
+          <p>Uzmanlığınızı paylaşın veya ihtiyaç duyduğunuz hizmeti kaliteli ustalarla tamamlayın.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="button button-primary" href="/register.html">Hemen Üye Ol</a>
+          <a class="button button-outline" href="/login.html">Zaten hesabım var</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul. Tüm hakları saklıdır.
+    </footer>
+
+    <script type="module" src="/js/home.js"></script>
+  </body>
+</html>

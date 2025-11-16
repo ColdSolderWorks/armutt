@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usta Paneli | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/providers.html">Ustalar</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li>
+              <button id="notification-toggle" class="icon-button" aria-label="Bildirimler">
+                🔔<span id="notification-indicator" class="indicator" hidden></span>
+              </button>
+              <div id="notification-panel" class="notification-panel" hidden>
+                <div class="notification-header">
+                  <h4>Bildirimler</h4>
+                </div>
+                <div id="notification-list" class="notification-list"></div>
+              </div>
+            </li>
+            <li><button id="logout" class="button secondary" type="button">Çıkış Yap</button></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="profile profile-dashboard">
+      <section class="profile-hero editable">
+        <div class="profile-banner" id="provider-banner-display"></div>
+        <div class="profile-header">
+          <div class="profile-avatar" id="provider-avatar-display"></div>
+          <div>
+            <h1 id="provider-name-display">Usta Paneli</h1>
+            <p id="provider-profession-display">Uzmanlık bilgilerinizi güncelleyin.</p>
+            <p class="profile-location" id="provider-city-display"></p>
+            <div class="profile-meta" id="provider-meta-display"></div>
+          </div>
+          <div class="profile-actions">
+            <span class="badge" id="provider-summary"></span>
+            <a class="icon-button" href="/settings.html" aria-label="Ayarlar">⚙️</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-feedback" id="provider-feedback"></section>
+
+      <section class="profile-content">
+        <div class="profile-main">
+          <article class="card profile-section">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Profil ve Medya</p>
+                <h2>Güncellemeleri Ayarlar'dan yönetin</h2>
+                <p>Profil, iletişim, medya ve dükkan bilgileri yeni Ayarlar sekmesinde toplandı.</p>
+              </div>
+              <a class="button button-ghost" href="/settings.html">Ayarları Aç</a>
+            </div>
+          </article>
+
+          <article class="card profile-section">
+            <div class="section-header">
+              <h2>Aktif Talepler</h2>
+              <button class="button secondary" type="button" id="refresh-requests">Yenile</button>
+            </div>
+            <div id="provider-requests" class="list"></div>
+          </article>
+
+          <article class="card profile-section">
+            <div class="section-header">
+              <h2>Tekliflerim</h2>
+              <button class="button secondary" type="button" id="refresh-offers">Yenile</button>
+            </div>
+            <div id="provider-offers" class="list"></div>
+          </article>
+        </div>
+
+        <aside class="profile-sidebar">
+          <article class="card profile-section">
+            <h2>Profil Durumu</h2>
+            <ul class="stat-list" id="provider-stats"></ul>
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/provider-dashboard.js"></script>
+  </body>
+</html>
