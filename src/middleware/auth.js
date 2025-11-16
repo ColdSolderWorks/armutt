@@ -1,11 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { get } = require('../db');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'local-dev-secret';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config');
 
 function createToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN || '7d' });
 }
 
 async function authenticate(db, token) {

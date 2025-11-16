@@ -1,224 +1,70 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs/promises');
-const { existsSync } = require('fs');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
 const { v4: uuid } = require('uuid');
 const bcrypt = require('bcrypt');
-const {
-  sanitizeText,
-  validatePasswordComplexity,
-  validateEmail,
-  randomFileName,
-  hashPassword,
-  comparePassword,
-  ALLOWED_MIMES,
-} = require('./src/utils/security');
-const { openDatabase, run, get, all } = require('./src/db');
-const { createToken, authMiddleware } = require('./src/middleware/auth');
+const { authMiddleware, createToken } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/middleware/error');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const DATA_DIR = path.join(__dirname, 'data');
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const MEDIA_ROOT = path.join(PUBLIC_DIR, 'uploads');
-const PROVIDER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'providers');
-const CUSTOMER_MEDIA_ROOT = path.join(MEDIA_ROOT, 'customers');
-const PROFANITY_FILE = path.join(DATA_DIR, 'profanity.json');
+const { csrfProtection } = require('./src/middleware/csrf');
+const { standardLimiter, authLimiter } = require('./src/middleware/rateLimit');
+const { requireOwnership } = require('./src/middleware/ownership');
+const { openDatabase, run, get, all } = require('./src/db');
+const {
+  buildUserResponse,
+  createUser,
+  updateProvider,
+  updateCustomer,
+  sanitizeText,
+  validateEmail,
+  validatePasswordComplexity,
+  comparePassword,
+} = require('./src/services/users');
+const { normalizeText, normalizeLocation, REGIONS } = require('./src/utils/regions');
+const { hasProfanity } = require('./src/utils/profanity');
+const { ensureMediaRoots } = require('./src/utils/media');
+const {
+  PORT,
+  PUBLIC_DIR,
+  DATA_DIR,
+  PROVIDER_MEDIA_ROOT,
+  CUSTOMER_MEDIA_ROOT,
+  ALLOWED_ORIGINS,
+} = require('./src/config');
 
 const ADMIN_EMAIL_HASH = process.env.ADMIN_EMAIL_HASH ? String(process.env.ADMIN_EMAIL_HASH) : null;
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env.ADMIN_PASSWORD_HASH) : null;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase() : null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : null;
 
-const REGIONS = [
-  {
-    city: 'Trabzon',
-    districts: [
-      'Ortahisar',
-      'Akçaabat',
-      'Araklı',
-      'Arsin',
-      'Beşikdüzü',
-      'Çarşıbaşı',
-      'Çaykara',
-      'Dernekpazarı',
-      'Düzköy',
-      'Hayrat',
-      'Köprübaşı',
-      'Maçka',
-      'Of',
-      'Sürmene',
-      'Şalpazarı',
-      'Tonya',
-      'Vakfıkebir',
-      'Yomra',
-    ],
-  },
-  { city: 'Gümüşhane', districts: ['Merkez', 'Kelkit', 'Köse', 'Kürtün', 'Şiran', 'Torul'] },
-  {
-    city: 'Rize',
-    districts: ['Merkez', 'Ardeşen', 'Çamlıhemşin', 'Çayeli', 'Derepazarı', 'Fındıklı', 'Güneysu', 'Hemşin', 'İkizdere', 'İyidere', 'Kalkandere', 'Pazar'],
-  },
-];
+const FAILED_ATTEMPTS = new Map();
+const MAX_ATTEMPTS = 5;
+const BLOCK_WINDOW_MS = 15 * 60 * 1000;
 
-const REGION_LOOKUP = REGIONS.reduce((acc, region) => {
-  const key = normalizeRegionKey(region.city);
-  acc[key] = region;
-  return acc;
-}, {});
+const app = express();
+const db = openDatabase();
 
+const allowedOrigins = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : ['http://localhost:3000'];
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Erişim izni yok.'));
+  },
+  credentials: true,
+};
+
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
+app.use(cors(corsOptions));
+app.use(standardLimiter);
 app.use(express.static(PUBLIC_DIR));
 
-const db = openDatabase();
-let profanityCache = null;
+app.use('/api', csrfProtection);
 
-function normalizeText(value) {
-  return (value || '')
-    .toString()
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9ğüşöçıİ\s]/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeRegionKey(value) {
-  return normalizeText(value).replace(/\s+/g, '');
-}
-
-function resolveRegion(city) {
-  const region = REGION_LOOKUP[normalizeRegionKey(city)];
-  return region || REGIONS[0];
-}
-
-function normalizeLocation(city, district) {
-  const region = resolveRegion(city);
-  const normalizedDistrict = normalizeRegionKey(district);
-  const matchedDistrict = region.districts.find((entry) => normalizeRegionKey(entry) === normalizedDistrict);
-  return {
-    city: region.city,
-    district: matchedDistrict || region.districts[0],
-  };
-}
-
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function ensureMediaRoots() {
-  await Promise.all([ensureDir(DATA_DIR), ensureDir(MEDIA_ROOT), ensureDir(PROVIDER_MEDIA_ROOT), ensureDir(CUSTOMER_MEDIA_ROOT)]);
-}
-
-function isDataUrl(value) {
-  return typeof value === 'string' && value.startsWith('data:');
-}
-
-function parseDataUrl(dataUrl) {
-  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
-  if (!match) {
-    throw new Error('Geçersiz veri URLsi.');
-  }
-  const mime = match[1];
-  const base64 = match[2];
-  if (!ALLOWED_MIMES.includes(mime)) {
-    const error = new Error('Sadece JPEG ve PNG dosyalarına izin veriliyor.');
-    error.status = 400;
-    throw error;
-  }
-  const buffer = Buffer.from(base64, 'base64');
-  const extension = mime === 'image/png' ? 'png' : 'jpg';
-  return { buffer, extension, mime };
-}
-
-function toPublicPath(filePath) {
-  const relative = path.relative(PUBLIC_DIR, filePath);
-  return `/${relative.split(path.sep).join('/')}`;
-}
-
-function fromPublicPath(publicPath) {
-  if (!publicPath) return null;
-  const cleaned = publicPath.replace(/^\/+/, '');
-  return path.join(PUBLIC_DIR, cleaned);
-}
-
-async function saveMedia(dataUrl, baseDir) {
-  if (!dataUrl) return '';
-  if (!isDataUrl(dataUrl)) return dataUrl;
-  const { buffer, extension } = parseDataUrl(dataUrl);
-  await ensureDir(baseDir);
-  const fileName = randomFileName(extension);
-  const destination = path.join(baseDir, fileName);
-  await fs.writeFile(destination, buffer);
-  return toPublicPath(destination);
-}
-
-async function removeFile(publicPath) {
-  if (!publicPath) return;
-  const absolute = fromPublicPath(publicPath);
-  if (!absolute) return;
-  try {
-    await fs.unlink(absolute);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-}
-
-async function loadProfanityList() {
-  if (profanityCache) return profanityCache;
-  if (!existsSync(PROFANITY_FILE)) return [];
-  const raw = await fs.readFile(PROFANITY_FILE, 'utf-8');
-  const data = JSON.parse(raw);
-  profanityCache = Array.isArray(data) ? data.map((item) => normalizeText(item)) : [];
-  return profanityCache;
-}
-
-async function hasProfanity(value) {
-  const normalized = normalizeText(value);
-  const entries = await loadProfanityList();
-  return entries.some((entry) => normalized.includes(entry));
-}
-
-function buildUserResponse(user, token) {
-  if (!user) return null;
-  const gallery = user.gallery ? JSON.parse(user.gallery) : [];
-  return {
-    id: user.id,
-    role: user.role,
-    email: user.email,
-    firstName: user.first_name,
-    lastName: user.last_name,
-    profession: user.profession,
-    category: user.category,
-    about: user.about,
-    city: user.city,
-    district: user.district,
-    contact: {
-      phone: user.phone,
-      email: user.contact_email || user.email,
-      website: user.website,
-    },
-    avatar: user.avatar,
-    banner: user.banner,
-    gallery,
-    rating: user.rating,
-    reviewCount: user.review_count,
-    completedJobs: user.completed_jobs,
-    verified: Boolean(user.verified),
-    token,
-  };
-}
-
-function requireOwnership(req, res, next) {
-  if (req.user.role === 'admin') return next();
-  const targetId = req.params.id || req.body.userId;
-  if (targetId && req.user.id !== targetId) {
-    return res.status(403).json({ message: 'Bu işlem için yetkiniz yok.' });
-  }
-  return next();
-}
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
 
 app.get('/api/locations', (_req, res) => {
   res.json(REGIONS);
@@ -228,19 +74,28 @@ app.get('/api/categories', (_req, res) => {
   res.json(['Boya', 'Nakliyat', 'Temizlik', 'Tadilat', 'Elektrik', 'Marangoz', 'Beyaz Eşya', 'Özel Ders']);
 });
 
-app.post('/api/auth/register', async (req, res, next) => {
+function isBlocked(email) {
+  const entry = FAILED_ATTEMPTS.get(email);
+  if (!entry) return false;
+  if (Date.now() - entry.time > BLOCK_WINDOW_MS) {
+    FAILED_ATTEMPTS.delete(email);
+    return false;
+  }
+  return entry.count >= MAX_ATTEMPTS;
+}
+
+function recordFailure(email) {
+  const existing = FAILED_ATTEMPTS.get(email) || { count: 0, time: Date.now() };
+  FAILED_ATTEMPTS.set(email, { count: existing.count + 1, time: existing.time });
+}
+
+function clearFailures(email) {
+  FAILED_ATTEMPTS.delete(email);
+}
+
+app.post('/api/auth/register', authLimiter, async (req, res, next) => {
   try {
-    const {
-      firstName,
-      lastName,
-      email,
-      password,
-      role,
-      profession,
-      category,
-      city,
-      district,
-    } = req.body || {};
+    const { firstName, lastName, email, password, role, profession, category, city, district } = req.body || {};
 
     if (!email || !validateEmail(email)) {
       return res.status(400).json({ message: 'Geçerli bir e-posta girin.' });
@@ -257,29 +112,17 @@ app.post('/api/auth/register', async (req, res, next) => {
       return res.status(409).json({ message: 'Bu e-posta ile bir hesap zaten var.' });
     }
 
-    const verificationCode = uuid();
-    const hashed = await hashPassword(password);
-    const location = normalizeLocation(city, district);
-
-    const userId = uuid();
-    await run(
-      db,
-      `INSERT INTO users (id, role, email, password_hash, first_name, last_name, profession, category, about, city, district, verification_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        userId,
-        role,
-        email.toLowerCase(),
-        hashed,
-        sanitizeText(firstName),
-        sanitizeText(lastName),
-        sanitizeText(profession),
-        sanitizeText(category),
-        '',
-        location.city,
-        location.district,
-        verificationCode,
-      ],
-    );
+    const { userId, verificationCode } = await createUser(db, {
+      firstName,
+      lastName,
+      email,
+      password,
+      role,
+      profession,
+      category,
+      city,
+      district,
+    });
 
     res.json({ message: 'Kayıt oluşturuldu. E-posta doğrulaması gerekiyor.', verificationCode, userId });
   } catch (error) {
@@ -287,7 +130,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/verify', async (req, res, next) => {
+app.post('/api/auth/verify', authLimiter, async (req, res, next) => {
   try {
     const { email, code } = req.body || {};
     if (!email || !code) {
@@ -306,38 +149,40 @@ app.post('/api/auth/verify', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res, next) => {
+app.post('/api/auth/login', authLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ message: 'E-posta ve şifre gereklidir.' });
     }
+    const loweredEmail = email.toLowerCase();
+    if (isBlocked(loweredEmail)) {
+      return res.status(429).json({ message: 'Çok sayıda hatalı giriş. Lütfen birkaç dakika sonra tekrar deneyin.' });
+    }
 
-    if (ADMIN_EMAIL && ADMIN_PASSWORD && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-      const ok = ADMIN_PASSWORD_HASH
-        ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH)
-        : password === ADMIN_PASSWORD;
+    if (ADMIN_EMAIL && ADMIN_PASSWORD && loweredEmail === ADMIN_EMAIL.toLowerCase()) {
+      const ok = ADMIN_PASSWORD_HASH ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH) : password === ADMIN_PASSWORD;
       if (!ok) {
+        recordFailure(loweredEmail);
         return res.status(401).json({ message: 'Geçersiz bilgiler.' });
       }
+      clearFailures(loweredEmail);
       const token = createToken({ sub: 'admin', role: 'admin', email: ADMIN_EMAIL });
-      return res.json({
-        message: 'Giriş başarılı.',
-        user: { id: 'admin', role: 'admin', email: ADMIN_EMAIL, token },
-      });
+      return res.json({ message: 'Giriş başarılı.', user: { id: 'admin', role: 'admin', email: ADMIN_EMAIL, token } });
     }
 
-    const user = await get(db, 'SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
-    if (!user) {
+    const user = await get(db, 'SELECT * FROM users WHERE email = ?', [loweredEmail]);
+    if (!user || !user.verified) {
+      recordFailure(loweredEmail);
       return res.status(401).json({ message: 'Geçersiz bilgiler.' });
-    }
-    if (!user.verified) {
-      return res.status(403).json({ message: 'E-posta doğrulaması yapılmadı.' });
     }
     const ok = await comparePassword(password, user.password_hash);
     if (!ok) {
+      recordFailure(loweredEmail);
       return res.status(401).json({ message: 'Geçersiz bilgiler.' });
     }
+
+    clearFailures(loweredEmail);
     const token = createToken({ sub: user.id, role: user.role, email: user.email });
     const payload = buildUserResponse(user, token);
     res.json({ message: 'Giriş başarılı.', user: payload });
@@ -382,88 +227,7 @@ app.put('/api/providers/:id', authMiddleware(db), requireOwnership, async (req, 
       return res.status(404).json({ message: 'Usta bulunamadı.' });
     }
 
-    const updates = { ...provider };
-    if (req.body.firstName !== undefined) updates.first_name = sanitizeText(req.body.firstName);
-    if (req.body.lastName !== undefined) updates.last_name = sanitizeText(req.body.lastName);
-    if (req.body.profession !== undefined) updates.profession = sanitizeText(req.body.profession);
-    if (req.body.category !== undefined) updates.category = sanitizeText(req.body.category);
-    if (req.body.about !== undefined) updates.about = sanitizeText(req.body.about);
-
-    if (req.body.city || req.body.district) {
-      const location = normalizeLocation(req.body.city || provider.city, req.body.district || provider.district);
-      updates.city = location.city;
-      updates.district = location.district;
-    }
-
-    if (req.body.contact) {
-      updates.phone = sanitizeText(req.body.contact.phone);
-      updates.contact_email = sanitizeText(req.body.contact.email || provider.email);
-      updates.website = sanitizeText(req.body.contact.website);
-    }
-
-    const providerDir = path.join(PROVIDER_MEDIA_ROOT, provider.id);
-    if (req.body.avatar !== undefined) {
-      if (!req.body.avatar) {
-        await removeFile(provider.avatar);
-        updates.avatar = '';
-      } else {
-        const avatar = await saveMedia(req.body.avatar, path.join(providerDir, 'avatar'));
-        await removeFile(provider.avatar);
-        updates.avatar = avatar;
-      }
-    }
-
-    if (req.body.banner !== undefined) {
-      if (!req.body.banner) {
-        await removeFile(provider.banner);
-        updates.banner = '';
-      } else {
-        const banner = await saveMedia(req.body.banner, path.join(providerDir, 'banner'));
-        await removeFile(provider.banner);
-        updates.banner = banner;
-      }
-    }
-
-    if (req.body.gallery) {
-      const items = Array.isArray(req.body.gallery) ? req.body.gallery : [];
-      const nextGallery = [];
-      for (const item of items) {
-        // eslint-disable-next-line no-await-in-loop
-        const stored = await saveMedia(item, path.join(providerDir, 'gallery'));
-        nextGallery.push(stored);
-      }
-      const oldGallery = provider.gallery ? JSON.parse(provider.gallery) : [];
-      for (const file of oldGallery) {
-        if (!nextGallery.includes(file)) {
-          // eslint-disable-next-line no-await-in-loop
-          await removeFile(file);
-        }
-      }
-      updates.gallery = JSON.stringify(nextGallery);
-    }
-
-    await run(
-      db,
-      `UPDATE users SET first_name=?, last_name=?, profession=?, category=?, about=?, city=?, district=?, phone=?, contact_email=?, website=?, avatar=?, banner=?, gallery=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-      [
-        updates.first_name,
-        updates.last_name,
-        updates.profession,
-        updates.category,
-        updates.about,
-        updates.city,
-        updates.district,
-        updates.phone,
-        updates.contact_email,
-        updates.website,
-        updates.avatar,
-        updates.banner,
-        updates.gallery,
-        provider.id,
-      ],
-    );
-
-    const refreshed = await get(db, 'SELECT * FROM users WHERE id = ?', [provider.id]);
+    const refreshed = await updateProvider(db, provider, req.body || {});
     res.json(buildUserResponse(refreshed));
   } catch (error) {
     next(error);
@@ -489,48 +253,45 @@ app.put('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, 
       return res.status(404).json({ message: 'Müşteri bulunamadı.' });
     }
 
-    const updates = { ...user };
-    if (req.body.profile) {
-      updates.first_name = sanitizeText(req.body.profile.firstName);
-      updates.last_name = sanitizeText(req.body.profile.lastName);
-      updates.about = sanitizeText(req.body.profile.about);
-    }
-    if (req.body.city || req.body.district) {
-      const location = normalizeLocation(req.body.city || user.city, req.body.district || user.district);
-      updates.city = location.city;
-      updates.district = location.district;
-    }
-    if (req.body.email && validateEmail(req.body.email)) {
-      updates.email = sanitizeText(req.body.email.toLowerCase());
-    }
-    if (req.body.phone) {
-      updates.phone = sanitizeText(req.body.phone);
-    }
-
-    const customerDir = path.join(CUSTOMER_MEDIA_ROOT, user.id, 'avatar');
-    if (req.body.avatar !== undefined) {
-      if (!req.body.avatar) {
-        await removeFile(user.avatar);
-        updates.avatar = '';
-      } else {
-        const avatar = await saveMedia(req.body.avatar, customerDir);
-        await removeFile(user.avatar);
-        updates.avatar = avatar;
-      }
-    }
-
-    await run(
-      db,
-      'UPDATE users SET first_name=?, last_name=?, about=?, city=?, district=?, email=?, phone=?, avatar=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [updates.first_name, updates.last_name, updates.about, updates.city, updates.district, updates.email, updates.phone, updates.avatar, user.id],
-    );
-
-    const refreshed = await get(db, 'SELECT * FROM users WHERE id = ?', [user.id]);
+    const refreshed = await updateCustomer(db, user, req.body || {});
     res.json(buildUserResponse(refreshed));
   } catch (error) {
     next(error);
   }
 });
+
+function serializeRequest(request) {
+  return {
+    id: request.id,
+    customerId: request.customer_id,
+    category: request.category,
+    description: request.description,
+    city: request.city,
+    district: request.district,
+    status: request.status,
+    createdAt: request.created_at,
+    acceptedOfferId: request.accepted_offer_id,
+  };
+}
+
+async function loadOffers(requestId) {
+  const offers = await all(db, 'SELECT * FROM offers WHERE request_id = ?', [requestId]);
+  const providerIds = offers.map((offer) => offer.provider_id);
+  const providers = providerIds.length
+    ? await all(db, `SELECT * FROM users WHERE id IN (${providerIds.map(() => '?').join(',')})`, providerIds)
+    : [];
+  const providerMap = providers.reduce((acc, provider) => ({ ...acc, [provider.id]: provider }), {});
+  return offers.map((offer) => ({
+    id: offer.id,
+    requestId: offer.request_id,
+    providerId: offer.provider_id,
+    message: offer.message,
+    price: offer.price,
+    status: offer.status,
+    createdAt: offer.created_at,
+    provider: providerMap[offer.provider_id] ? buildUserResponse(providerMap[offer.provider_id]) : undefined,
+  }));
+}
 
 app.get('/api/requests', authMiddleware(db), async (_req, res, next) => {
   try {
@@ -713,42 +474,9 @@ app.delete('/api/admin/requests/:requestId/offers/:offerId', authMiddleware(db, 
   }
 });
 
-function serializeRequest(request) {
-  return {
-    id: request.id,
-    customerId: request.customer_id,
-    category: request.category,
-    description: request.description,
-    city: request.city,
-    district: request.district,
-    status: request.status,
-    createdAt: request.created_at,
-    acceptedOfferId: request.accepted_offer_id,
-  };
-}
-
-async function loadOffers(requestId) {
-  const offers = await all(db, 'SELECT * FROM offers WHERE request_id = ?', [requestId]);
-  const providerIds = offers.map((offer) => offer.provider_id);
-  const providers = providerIds.length
-    ? await all(db, `SELECT * FROM users WHERE id IN (${providerIds.map(() => '?').join(',')})`, providerIds)
-    : [];
-  const providerMap = providers.reduce((acc, provider) => ({ ...acc, [provider.id]: provider }), {});
-  return offers.map((offer) => ({
-    id: offer.id,
-    requestId: offer.request_id,
-    providerId: offer.provider_id,
-    message: offer.message,
-    price: offer.price,
-    status: offer.status,
-    createdAt: offer.created_at,
-    provider: providerMap[offer.provider_id] ? buildUserResponse(providerMap[offer.provider_id]) : undefined,
-  }));
-}
-
 app.use(errorHandler);
 
-ensureMediaRoots()
+ensureMediaRoots([DATA_DIR, PUBLIC_DIR, PROVIDER_MEDIA_ROOT, CUSTOMER_MEDIA_ROOT])
   .then(() => {
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console

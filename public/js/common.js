@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'trabzonisbul-session';
+const CSRF_KEY = 'trabzonisbul-csrf';
 
 export function getSession() {
   try {
@@ -16,6 +17,15 @@ export function setSession(user) {
 
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+async function ensureCsrfToken() {
+  const cached = sessionStorage.getItem(CSRF_KEY);
+  if (cached) return cached;
+  const response = await fetch('/api/csrf-token');
+  const payload = await response.json();
+  sessionStorage.setItem(CSRF_KEY, payload.csrfToken);
+  return payload.csrfToken;
 }
 
 export function redirectAuthenticated() {
@@ -90,6 +100,9 @@ export async function apiRequest(path, options = {}) {
   const session = getSession();
   if (session?.token) {
     config.headers = { ...config.headers, Authorization: `Bearer ${session.token}` };
+  }
+  if (config.method && config.method.toUpperCase() !== 'GET' && !config.headers['X-CSRF-Token']) {
+    config.headers['X-CSRF-Token'] = await ensureCsrfToken();
   }
   const response = await fetch(path, config);
   let payload = null;

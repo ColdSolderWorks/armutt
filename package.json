@@ -16,7 +16,11 @@
   "type": "commonjs",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "csurf": "^1.11.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^7.4.0",
     "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.7",
     "uuid": "^13.0.0"

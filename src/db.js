@@ -10,6 +10,8 @@ function openDatabase() {
   }
   const db = new sqlite3.Database(DB_PATH);
   db.serialize(() => {
+    db.configure('busyTimeout', 5000);
+    db.run('PRAGMA journal_mode = WAL');
     db.run('PRAGMA foreign_keys = ON');
     db.run(`
       CREATE TABLE IF NOT EXISTS users (

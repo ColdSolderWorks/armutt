@@ -97,7 +97,13 @@ Tüm uçlar JSON döner ve hata durumlarında açıklayıcı mesajlar içerir. M
 
 ## Geliştirme Notları
 
-- JSON dosyaları eşzamanlı yazıldığından gerçek projelerde kilitleme veya satır içi kuyruklama gibi önlemler eklenebilir.
-- Üretim ortamında oturum yönetimi veya JWT tabanlı kimlik doğrulama tercih edilmelidir.
-- Görsel yüklemeleri otomatik olarak disk üzerinde saklanır; base64 veri URI'ları istemci oturumunda tutulmaz.
-- Yönetim paneline erişim için ortam değişkenlerini ayarlama adımları "Yönetici hesabını etkinleştirme" bölümünde açıklanmıştır; `.env` dosyası depoya eklenmez.
+Bu proje artık JSON yerine SQLite kullanan güvenli bir temel üzerine kuruludur. Öne çıkan noktalar:
+
+- JWT ile 7 günlük süreli oturumlar ve `Authorization` header kontrolü.
+- `/api` altında CSRF koruması ve istemcide otomatik CSRF token alma (bkz. `public/js/common.js`).
+- `express-rate-limit` ve 5 başarısız girişten sonra 15 dakikalık bloke ile kaba kuvvet engelleme.
+- Yalnızca izinli origin'lere açılan CORS (`ALLOWED_ORIGINS`) ve admin işlemleri için `authMiddleware` + rol kontrolü.
+- Görsel yüklemelerinde MIME/boyut doğrulaması, rastgele dosya adları ve kullanıcı bazlı dizinler altında saklama.
+- Tüm serbest metin alanları XSS'e karşı HTML encode edilerek saklanır.
+
+Yönetim paneline erişim için ortam değişkenlerini ayarlama adımları "Yönetici hesabını etkinleştirme" bölümünde açıklanmıştır; `.env` dosyası depoya eklenmez.
