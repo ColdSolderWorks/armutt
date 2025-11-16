@@ -11,7 +11,6 @@ function buildUserResponse(user, token) {
   const gallery = user.gallery ? JSON.parse(user.gallery) : [];
   return {
     id: user.id,
-    role: user.role,
     email: user.email,
     firstName: user.first_name,
     lastName: user.last_name,
@@ -28,10 +27,22 @@ function buildUserResponse(user, token) {
     avatar: user.avatar,
     banner: user.banner,
     gallery,
-    rating: user.rating,
-    reviewCount: user.review_count,
-    completedJobs: user.completed_jobs,
+    media: {
+      avatar: user.avatar,
+      banner: user.banner,
+      gallery,
+    },
+    stats: {
+      rating: user.rating,
+      reviewCount: user.review_count,
+      completedJobs: user.completed_jobs,
+    },
     verified: Boolean(user.verified),
+    access: {
+      admin: user.role === 'admin',
+      provider: user.role === 'usta',
+      customer: user.role === 'musteri',
+    },
     token,
   };
 }

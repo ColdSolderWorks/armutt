@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+const sanitizeHtml = require('sanitize-html');
 const he = require('he');
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -7,7 +8,23 @@ const ALLOWED_MIMES = ['image/jpeg', 'image/png'];
 
 function sanitizeText(input) {
   if (!input) return '';
-  return he.escape(String(input).trim());
+  const cleaned = sanitizeHtml(String(input), {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: 'discard',
+    transformTags: {
+      '*': (tagName, attribs) => {
+        const safeAttribs = Object.keys(attribs || {}).reduce((acc, key) => {
+          if (!key.toLowerCase().startsWith('on')) {
+            acc[key] = attribs[key];
+          }
+          return acc;
+        }, {});
+        return { tagName, attribs: safeAttribs };
+      },
+    },
+  });
+  return he.escape(cleaned.trim());
 }
 
 function validatePasswordComplexity(password) {

@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const { randomFileName, ALLOWED_MIMES } = require('./security');
-const { UPLOAD_MAX_BYTES, PUBLIC_DIR } = require('../config');
+const { UPLOAD_MAX_BYTES, MEDIA_ROOT } = require('../config');
 
 function isDataUrl(value) {
   return typeof value === 'string' && value.startsWith('data:');
@@ -57,19 +57,19 @@ async function saveMedia(dataUrl, baseDir) {
 }
 
 function toPublicPath(filePath) {
-  const relative = path.relative(PUBLIC_DIR, filePath);
+  const relative = path.relative(MEDIA_ROOT, filePath);
   const normalized = sanitizeRelativePath(relative);
   if (!normalized) return '';
-  return `/${normalized.split(path.sep).join('/')}`;
+  return `/media/${normalized.split(path.sep).join('/')}`;
 }
 
 function fromPublicPath(publicPath) {
   if (!publicPath) return null;
   const cleaned = sanitizeRelativePath(publicPath);
   if (!cleaned) return null;
-  const absolute = path.join(PUBLIC_DIR, cleaned);
+  const absolute = path.join(MEDIA_ROOT, cleaned.replace(/^media\//, ''));
   const resolved = path.resolve(absolute);
-  if (!resolved.startsWith(path.resolve(PUBLIC_DIR))) {
+  if (!resolved.startsWith(path.resolve(MEDIA_ROOT))) {
     return null;
   }
   return resolved;

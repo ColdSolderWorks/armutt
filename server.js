@@ -2,12 +2,13 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 const { v4: uuid, validate: validateUuid } = require('uuid');
 const bcrypt = require('bcrypt');
 const { authMiddleware, createToken } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/middleware/error');
 const { csrfProtection } = require('./src/middleware/csrf');
-const { standardLimiter, authLimiter, mutateLimiter, requestsLimiter } = require('./src/middleware/rateLimit');
+const { authLimiter, mutateLimiter, requestsLimiter } = require('./src/middleware/rateLimit');
 const { requireOwnership } = require('./src/middleware/ownership');
 const { openDatabase, run, get, all } = require('./src/db');
 const {
@@ -31,7 +32,10 @@ const {
   PROVIDER_MEDIA_ROOT,
   CUSTOMER_MEDIA_ROOT,
   ALLOWED_ORIGINS,
+  DEFAULT_DEV_ORIGINS,
 } = require('./src/config');
+const { fromPublicPath } = require('./src/utils/media');
+const { logInfo } = require('./src/logger');
 
 const ADMIN_EMAIL_HASH = process.env.ADMIN_EMAIL_HASH ? String(process.env.ADMIN_EMAIL_HASH) : null;
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env.ADMIN_PASSWORD_HASH) : null;
@@ -47,10 +51,11 @@ const db = openDatabase();
 if (!ALLOWED_ORIGINS.length && process.env.NODE_ENV === 'production') {
   throw new Error('Production ortamında ALLOWED_ORIGINS tanımlanmalıdır.');
 }
-const allowedOrigins = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : ['http://localhost:3000'];
+const allowedOrigins = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : DEFAULT_DEV_ORIGINS;
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (origin && allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Erişim izni yok.'));
@@ -65,18 +70,30 @@ app.use((req, _res, next) => {
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(cors(corsOptions));
-app.use(standardLimiter);
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     return mutateLimiter(req, res, next);
   }
   return next();
 });
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, { index: false, dotfiles: 'ignore' }));
 
-app.use('/api', csrfProtection);
+app.get('/media/*', (req, res, next) => {
+  const absolute = fromPublicPath(req.path.replace(/^\//, ''));
+  if (!absolute) return res.status(404).json({ message: 'Dosya bulunamadı.' });
+  return res.sendFile(absolute, { dotfiles: 'deny' }, (err) => {
+    if (err) next(err);
+  });
+});
 
-app.get('/api/csrf-token', (req, res) => {
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    return csrfProtection(req, res, next);
+  }
+  return next();
+});
+
+app.get('/api/csrf-token', csrfProtection, (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
@@ -86,6 +103,10 @@ app.get('/api/locations', (_req, res) => {
 
 app.get('/api/categories', (_req, res) => {
   res.json(['Boya', 'Nakliyat', 'Temizlik', 'Tadilat', 'Elektrik', 'Marangoz', 'Beyaz Eşya', 'Özel Ders']);
+});
+
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 function validateIdParam(param) {
@@ -205,7 +226,16 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
       }
       await clearFailures(loweredEmail);
       const token = createToken({ sub: 'admin', role: 'admin', email: ADMIN_EMAIL });
-      return res.json({ message: 'Giriş başarılı.', user: { id: 'admin', role: 'admin', email: ADMIN_EMAIL, token } });
+      return res.json({
+        message: 'Giriş başarılı.',
+        user: {
+          id: 'admin',
+          email: ADMIN_EMAIL,
+          access: { admin: true, provider: false, customer: false },
+          verified: true,
+          token,
+        },
+      });
     }
 
     const user = await get(db, 'SELECT * FROM users WHERE email = ?', [loweredEmail]);

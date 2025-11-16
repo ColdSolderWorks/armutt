@@ -1,4 +1,4 @@
-import { redirectAuthenticated, apiRequest, setSession, renderAlert } from './common.js';
+import { redirectAuthenticated, apiRequest, setSession, renderAlert, deriveRole } from './common.js';
 
 redirectAuthenticated();
 
@@ -17,10 +17,11 @@ form?.addEventListener('submit', async (event) => {
     });
     setSession(user);
     renderAlert(feedback, 'success', message || 'Giriş başarılı.');
+    const role = deriveRole(user.access);
     setTimeout(() => {
-      if (user.role === 'admin') {
+      if (role === 'admin') {
         window.location.replace('/admin-dashboard.html');
-      } else if (user.role === 'usta') {
+      } else if (role === 'usta') {
         window.location.replace('/provider-dashboard.html');
       } else {
         window.location.replace('/customer-dashboard.html');

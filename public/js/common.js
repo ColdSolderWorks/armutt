@@ -12,7 +12,11 @@ export function getSession() {
 }
 
 export function setSession(user) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  const normalized = {
+    ...user,
+    role: deriveRole(user?.access),
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 }
 
 export function clearSession() {
@@ -55,6 +59,13 @@ export function ensureRole(requiredRole) {
     return null;
   }
   return session;
+}
+
+export function deriveRole(access) {
+  if (access?.admin) return 'admin';
+  if (access?.provider) return 'usta';
+  if (access?.customer) return 'musteri';
+  return null;
 }
 
 export function updateSessionProfile(patch) {

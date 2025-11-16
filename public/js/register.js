@@ -72,8 +72,9 @@ verifyForm?.addEventListener('submit', async (event) => {
     const { user, message } = verifyResponse;
     setSession(user);
     renderAlert(feedback, 'success', message || 'Doğrulama tamamlandı. Yönlendiriliyorsunuz...');
+    const role = user?.access?.provider ? 'usta' : user?.access?.customer ? 'musteri' : null;
     setTimeout(() => {
-      if (user.role === 'usta') {
+      if (role === 'usta') {
         window.location.replace('/provider-dashboard.html');
       } else {
         window.location.replace('/customer-dashboard.html');

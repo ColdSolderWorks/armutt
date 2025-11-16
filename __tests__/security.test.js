@@ -1,8 +1,8 @@
 const { sanitizeText, timingSafeCompare } = require('../src/utils/security');
 
 describe('sanitizeText', () => {
-  it('encodes HTML entities', () => {
-    expect(sanitizeText('<script>alert("x")</script>')).toBe('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;');
+  it('strips scripts and encodes output', () => {
+    expect(sanitizeText('<script>alert("x")</script>')).toBe('');
   });
 });
 
