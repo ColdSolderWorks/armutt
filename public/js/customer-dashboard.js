@@ -3,13 +3,11 @@ import {
   attachLogout,
   apiRequest,
   renderAlert,
-  setSession,
-  readFileAsDataUrl,
   formatDate,
   createStatusPill,
 } from './common.js';
 import { initialsFromName } from './ui.js';
-import { initializeLocationSelects, resolveSelectedLocation } from './locations.js';
+import { initializeNotifications } from './notifications.js';
 
 const session = ensureRole('musteri');
 if (!session) {
@@ -17,7 +15,6 @@ if (!session) {
 }
 
 const feedback = document.getElementById('customer-feedback');
-const profileForm = document.getElementById('customer-profile-form');
 const requestForm = document.getElementById('request-form');
 const requestsContainer = document.getElementById('customer-requests');
 const refreshRequestsButton = document.getElementById('refresh-requests');
@@ -27,35 +24,14 @@ const heroMeta = document.getElementById('customer-meta-display');
 const heroAvatar = document.getElementById('customer-avatar-display');
 const statsList = document.getElementById('customer-stats');
 const latestOffersContainer = document.getElementById('customer-latest-offers');
-const citySelect = document.getElementById('cust-city');
-const districtSelect = document.getElementById('cust-district');
 
 attachLogout(document.getElementById('logout'));
+initializeNotifications();
 
 document.title = `Müşteri Paneli | ${session.profile?.firstName || 'TrabzonİşBul'}`;
 
 let customerData = null;
 let customerRequests = [];
-let locationInitialized = false;
-
-async function syncLocationSelectors(city, district) {
-  if (!citySelect || !districtSelect) {
-    return;
-  }
-  if (!locationInitialized) {
-    await initializeLocationSelects(citySelect, districtSelect, { city, district });
-    locationInitialized = true;
-    return;
-  }
-  if (city) {
-    citySelect.value = city;
-    citySelect.dispatchEvent(new Event('change'));
-  }
-  if (district) {
-    districtSelect.value = district;
-  }
-}
-
 function renderHero() {
   if (!customerData) return;
   const profile = customerData.profile || {};
@@ -89,64 +65,17 @@ function renderHero() {
 }
 
 async function populateProfileForm() {
-  if (!customerData || !profileForm) return;
-  const profile = customerData.profile || {};
-  profileForm.querySelector('#cust-firstName').value = profile.firstName || '';
-  profileForm.querySelector('#cust-lastName').value = profile.lastName || '';
-  await syncLocationSelectors(profile.city, profile.district);
-  profileForm.querySelector('#cust-email').value = profile.email || session.email || '';
-  profileForm.querySelector('#cust-phone').value = profile.phone || '';
+  if (!customerData) return;
 }
 
 async function loadCustomer() {
   try {
     customerData = await apiRequest(`/api/customers/${session.id}`);
     renderHero();
-    await populateProfileForm();
     } catch (error) {
     renderAlert(feedback, 'error', error.message);
   }
 }
-
-profileForm?.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const formData = new FormData(profileForm);
-  const payload = {
-    firstName: formData.get('firstName'),
-    lastName: formData.get('lastName'),
-    ...resolveSelectedLocation(citySelect, districtSelect),
-    email: formData.get('email'),
-    phone: formData.get('phone'),
-  };
-
-  const avatarFile = profileForm.querySelector('#cust-avatar').files[0];
-  if (avatarFile) {
-    try {
-      payload.avatar = await readFileAsDataUrl(avatarFile);
-    } catch (error) {
-      renderAlert(feedback, 'error', error.message);
-      return;
-    }
-  }
-
-  try {
-    const updated = await apiRequest(`/api/customers/${session.id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-    const nextSession = { ...session, ...updated, token: session.token };
-    setSession(nextSession);
-    session.profile = updated.profile || session.profile;
-    if (updated.email) {
-      session.email = updated.email;
-    }
-    renderAlert(feedback, 'success', 'Profiliniz güncellendi.');
-    profileForm.reset();
-    await loadCustomer();
-  } catch (error) {
-    renderAlert(feedback, 'error', error.message);
-  }
-});
 
 requestForm?.addEventListener('submit', async (event) => {
   event.preventDefault();

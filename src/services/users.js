@@ -19,6 +19,8 @@ function buildUserResponse(user, token) {
     about: user.about,
     city: user.city,
     district: user.district,
+    shopName: user.shop_name,
+    shopAddress: user.shop_address,
     contact: {
       phone: user.phone,
       email: user.contact_email || user.email,
@@ -38,6 +40,7 @@ function buildUserResponse(user, token) {
       completedJobs: user.completed_jobs,
     },
     verified: Boolean(user.verified),
+    fullName: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
     access: {
       admin: user.role === 'admin',
       provider: user.role === 'usta',
@@ -76,11 +79,21 @@ async function createUser(db, payload) {
 
 async function updateProvider(db, provider, body) {
   const updates = { ...provider };
-  if (body.firstName !== undefined) updates.first_name = sanitizeText(body.firstName);
-  if (body.lastName !== undefined) updates.last_name = sanitizeText(body.lastName);
+  if (body.firstName && sanitizeText(body.firstName) !== provider.first_name) {
+    const err = new Error('Ad bilgisi kayıt sonrası değiştirilemez.');
+    err.status = 400;
+    throw err;
+  }
+  if (body.lastName && sanitizeText(body.lastName) !== provider.last_name) {
+    const err = new Error('Soyad bilgisi kayıt sonrası değiştirilemez.');
+    err.status = 400;
+    throw err;
+  }
   if (body.profession !== undefined) updates.profession = sanitizeText(body.profession);
   if (body.category !== undefined) updates.category = sanitizeText(body.category);
   if (body.about !== undefined) updates.about = sanitizeText(body.about);
+  if (body.shopName !== undefined) updates.shop_name = sanitizeText(body.shopName);
+  if (body.shopAddress !== undefined) updates.shop_address = sanitizeText(body.shopAddress);
 
   if (body.city || body.district) {
     const location = normalizeLocation(body.city || provider.city, body.district || provider.district);
@@ -137,7 +150,7 @@ async function updateProvider(db, provider, body) {
 
   await run(
     db,
-    `UPDATE users SET first_name=?, last_name=?, profession=?, category=?, about=?, city=?, district=?, phone=?, contact_email=?, website=?, avatar=?, banner=?, gallery=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE users SET first_name=?, last_name=?, profession=?, category=?, about=?, city=?, district=?, phone=?, contact_email=?, website=?, avatar=?, banner=?, gallery=?, shop_name=?, shop_address=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
     [
       updates.first_name,
       updates.last_name,
@@ -152,6 +165,8 @@ async function updateProvider(db, provider, body) {
       updates.avatar,
       updates.banner,
       updates.gallery,
+      updates.shop_name,
+      updates.shop_address,
       provider.id,
     ],
   );
@@ -162,8 +177,16 @@ async function updateProvider(db, provider, body) {
 async function updateCustomer(db, user, body) {
   const updates = { ...user };
   if (body.profile) {
-    updates.first_name = sanitizeText(body.profile.firstName);
-    updates.last_name = sanitizeText(body.profile.lastName);
+    if (body.profile.firstName && sanitizeText(body.profile.firstName) !== user.first_name) {
+      const err = new Error('Ad bilgisi kayıt sonrası değiştirilemez.');
+      err.status = 400;
+      throw err;
+    }
+    if (body.profile.lastName && sanitizeText(body.profile.lastName) !== user.last_name) {
+      const err = new Error('Soyad bilgisi kayıt sonrası değiştirilemez.');
+      err.status = 400;
+      throw err;
+    }
     updates.about = sanitizeText(body.profile.about);
   }
   if (body.city || body.district) {

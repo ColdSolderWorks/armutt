@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -36,6 +37,7 @@ const {
 } = require('./src/config');
 const { fromPublicPath } = require('./src/utils/media');
 const { logInfo } = require('./src/logger');
+const { createWebSocketServer } = require('./src/ws');
 
 const ADMIN_EMAIL_HASH = process.env.ADMIN_EMAIL_HASH ? String(process.env.ADMIN_EMAIL_HASH) : null;
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env.ADMIN_PASSWORD_HASH) : null;
@@ -46,7 +48,9 @@ const MAX_ATTEMPTS = 5;
 const BLOCK_WINDOW_MS = 15 * 60 * 1000;
 
 const app = express();
+const server = http.createServer(app);
 const db = openDatabase();
+let websocketManager = null;
 
 if (!ALLOWED_ORIGINS.length && process.env.NODE_ENV === 'production') {
   throw new Error('Production ortamında ALLOWED_ORIGINS tanımlanmalıdır.');
@@ -116,6 +120,24 @@ function validateIdParam(param) {
       return res.status(400).json({ message: 'Geçersiz kimlik değeri.' });
     }
     return next();
+  };
+}
+
+function serializeNotification(row) {
+  if (!row) return null;
+  let payload = null;
+  try {
+    payload = row.payload ? JSON.parse(row.payload) : null;
+  } catch (_err) {
+    payload = null;
+  }
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    message: row.message,
+    payload,
+    read: Boolean(row.is_read),
+    createdAt: row.created_at,
   };
 }
 
@@ -433,6 +455,36 @@ app.post('/api/requests', authMiddleware(db), requireOwnership, requestsLimiter,
       location.district,
     ]);
     const created = await get(db, 'SELECT * FROM requests WHERE id = ?', [id]);
+    const providers = await all(
+      db,
+      'SELECT id, first_name, last_name FROM users WHERE role = "usta" AND district = ?',
+      [location.district],
+    );
+    const customerName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Müşteri';
+    const payload = {
+      requestId: id,
+      customerName,
+      requestCategory: sanitizeText(category),
+      requestDescription: sanitizeText(description),
+    };
+    const message = `${customerName || 'Müşteri'} adlı kullanıcı, '${sanitizeText(description) || sanitizeText(category)}' için yeni bir hizmet talebi oluşturdu.`;
+    await Promise.all(
+      providers.map(async (provider) => {
+        const notificationId = uuid();
+        await run(
+          db,
+          'INSERT INTO notifications (id, user_id, request_id, message, payload) VALUES (?,?,?,?,?)',
+          [notificationId, provider.id, id, message, JSON.stringify(payload)],
+        );
+        websocketManager?.broadcast([provider.id], {
+          type: 'request',
+          id: notificationId,
+          ...payload,
+          message,
+          createdAt: new Date().toISOString(),
+        });
+      }),
+    );
     res.status(201).json(serializeRequest(created));
   } catch (error) {
     next(error);
@@ -483,6 +535,32 @@ app.post('/api/requests/:id/offers/:offerId/accept', validateIdParam('id'), vali
     await run(db, 'UPDATE offers SET status = "accepted" WHERE id = ?', [offer.id]);
     await run(db, 'UPDATE requests SET status = "Teklif Kabul Edildi", accepted_offer_id = ? WHERE id = ?', [offer.id, request.id]);
     res.json({ message: 'Teklif kabul edildi.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/notifications', authMiddleware(db), async (req, res, next) => {
+  try {
+    const rows = await all(
+      db,
+      'SELECT * FROM notifications WHERE user_id = ? ORDER BY datetime(created_at) DESC LIMIT 50',
+      [req.user.id],
+    );
+    res.json(rows.map((row) => serializeNotification(row)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/notifications/:id/read', validateIdParam('id'), authMiddleware(db), async (req, res, next) => {
+  try {
+    const notification = await get(db, 'SELECT * FROM notifications WHERE id = ?', [req.params.id]);
+    if (!notification || notification.user_id !== req.user.id) {
+      return res.status(404).json({ message: 'Bildirim bulunamadı.' });
+    }
+    await run(db, 'UPDATE notifications SET is_read = 1 WHERE id = ?', [notification.id]);
+    res.json({ message: 'Bildirim güncellendi.' });
   } catch (error) {
     next(error);
   }
@@ -559,7 +637,8 @@ app.use(errorHandler);
 
 ensureMediaRoots([DATA_DIR, PUBLIC_DIR, PROVIDER_MEDIA_ROOT, CUSTOMER_MEDIA_ROOT])
   .then(() => {
-    app.listen(PORT, () => {
+    websocketManager = createWebSocketServer(server, db);
+    server.listen(PORT, () => {
       // eslint-disable-next-line no-console
       console.log(`Server is running on port ${PORT}`);
     });

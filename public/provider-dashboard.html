@@ -14,6 +14,17 @@
           <ul>
             <li><a href="/providers.html">Ustalar</a></li>
             <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li>
+              <button id="notification-toggle" class="icon-button" aria-label="Bildirimler">
+                🔔<span id="notification-indicator" class="indicator" hidden></span>
+              </button>
+              <div id="notification-panel" class="notification-panel" hidden>
+                <div class="notification-header">
+                  <h4>Bildirimler</h4>
+                </div>
+                <div id="notification-list" class="notification-list"></div>
+              </div>
+            </li>
             <li><button id="logout" class="button secondary" type="button">Çıkış Yap</button></li>
           </ul>
         </nav>
@@ -33,6 +44,7 @@
           </div>
           <div class="profile-actions">
             <span class="badge" id="provider-summary"></span>
+            <a class="icon-button" href="/settings.html" aria-label="Ayarlar">⚙️</a>
           </div>
         </div>
       </section>
@@ -42,67 +54,14 @@
       <section class="profile-content">
         <div class="profile-main">
           <article class="card profile-section">
-            <h2>Profil Bilgileri</h2>
-            <form id="provider-profile-form" class="stacked-form">
-              <div class="form-grid">
-                <div>
-                  <label for="prov-firstName">Ad</label>
-                  <input id="prov-firstName" name="firstName" type="text" required />
-                </div>
-                <div>
-                  <label for="prov-lastName">Soyad</label>
-                  <input id="prov-lastName" name="lastName" type="text" required />
-                </div>
-                <div>
-                  <label for="prov-profession">Uzmanlık</label>
-                  <input id="prov-profession" name="profession" type="text" placeholder="Örn. Boya Ustası" />
-                </div>
-                <div>
-                  <label for="prov-category">Kategori</label>
-                  <input id="prov-category" name="category" type="text" placeholder="Örn. Boya" />
-                </div>
-                <div>
-                  <label for="prov-city">Şehir</label>
-                  <select id="prov-city" name="city" required>
-                    <option value="">Şehir seçin</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="prov-district">İlçe</label>
-                  <select id="prov-district" name="district" required>
-                    <option value="">İlçe seçin</option>
-                  </select>
-                </div>
-              </div>
+            <div class="section-header">
               <div>
-                <label for="prov-about">Hakkınızda</label>
-                <textarea id="prov-about" name="about" placeholder="Deneyiminiz, sunduğunuz hizmetler ve uzmanlaştığınız alanlar"></textarea>
+                <p class="eyebrow">Profil ve Medya</p>
+                <h2>Güncellemeleri Ayarlar'dan yönetin</h2>
+                <p>Profil, iletişim, medya ve dükkan bilgileri yeni Ayarlar sekmesinde toplandı.</p>
               </div>
-              <button class="button button-primary" type="submit">Profili Güncelle</button>
-            </form>
-          </article>
-
-          <article class="card profile-section">
-            <h2>Medya Merkezi</h2>
-            <p>Kapak, profil ve iş fotoğraflarınızı yükleyin. Facebook benzeri profiliniz daha da güçlü görünsün.</p>
-            <form id="provider-media-form" class="stacked-form">
-              <div class="form-grid">
-                <div>
-                  <label for="prov-avatar">Profil Fotoğrafı</label>
-                  <input id="prov-avatar" type="file" accept="image/*" />
-                </div>
-                <div>
-                  <label for="prov-banner">Kapak Fotoğrafı</label>
-                  <input id="prov-banner" type="file" accept="image/*" />
-                </div>
-                <div>
-                  <label for="prov-gallery">Galeri (birden fazla seçin)</label>
-                  <input id="prov-gallery" type="file" accept="image/*" multiple />
-                </div>
-              </div>
-              <button class="button button-secondary" type="submit">Medya Güncelle</button>
-            </form>
-            <div class="media-preview" id="provider-media-preview"></div>
+              <a class="button button-ghost" href="/settings.html">Ayarları Aç</a>
+            </div>
           </article>
 
           <article class="card profile-section">
@@ -123,27 +82,6 @@
         </div>
 
         <aside class="profile-sidebar">
-          <article class="card profile-section">
-            <h2>İletişim Bilgileri</h2>
-            <form id="provider-contact-form" class="stacked-form">
-              <div class="form-grid">
-                <div>
-                  <label for="prov-phone">Telefon</label>
-                  <input id="prov-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
-                </div>
-                <div>
-                  <label for="prov-email">E-posta</label>
-                  <input id="prov-email" name="email" type="email" />
-                </div>
-                <div>
-                  <label for="prov-website">Web sitesi</label>
-                  <input id="prov-website" name="website" type="url" placeholder="https://" />
-                </div>
-              </div>
-              <button class="button button-primary" type="submit">İletişimi Kaydet</button>
-            </form>
-          </article>
-
           <article class="card profile-section">
             <h2>Profil Durumu</h2>
             <ul class="stat-list" id="provider-stats"></ul>

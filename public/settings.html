@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ayarlar | TrabzonİşBul</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand">TrabzonİşBul <span>Beta</span></a>
+        <nav>
+          <ul>
+            <li><a href="/providers.html">Ustalar</a></li>
+            <li><a href="/customer-dashboard.html">Müşteri Paneli</a></li>
+            <li><a href="/provider-dashboard.html">Usta Paneli</a></li>
+            <li>
+              <button id="notification-toggle" class="icon-button" aria-label="Bildirimler">
+                🔔<span id="notification-indicator" class="indicator" hidden></span>
+              </button>
+              <div id="notification-panel" class="notification-panel" hidden>
+                <div class="notification-header">
+                  <h4>Bildirimler</h4>
+                </div>
+                <div id="notification-list" class="notification-list"></div>
+              </div>
+            </li>
+            <li><button id="logout" class="button secondary" type="button">Çıkış Yap</button></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="profile profile-dashboard">
+      <section class="profile-hero">
+        <div class="profile-banner muted"></div>
+        <div class="profile-header">
+          <div class="profile-avatar" id="settings-avatar-display"></div>
+          <div>
+            <h1 id="settings-title">Ayarlar</h1>
+            <p>Profil, iletişim ve medya ayarlarını yönetin.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-feedback" id="settings-feedback"></section>
+
+      <section class="profile-content">
+        <div class="profile-main">
+          <div class="tabs">
+            <div class="tab-list" role="tablist">
+              <button class="tab active" data-tab="profile" role="tab" aria-selected="true">Profil</button>
+            </div>
+
+            <div class="tab-panels">
+              <article class="card tab-panel active" id="tab-profile" role="tabpanel">
+                <div class="stacked">
+                  <section id="customer-settings" hidden>
+                    <div class="section-header">
+                      <div>
+                        <p class="eyebrow">Müşteri</p>
+                        <h2>Profil Bilgileri</h2>
+                      </div>
+                    </div>
+                    <form id="customer-settings-form" class="stacked-form">
+                      <div class="form-grid">
+                        <div>
+                          <label for="settings-cust-firstName">Ad</label>
+                          <input id="settings-cust-firstName" name="firstName" type="text" readonly />
+                        </div>
+                        <div>
+                          <label for="settings-cust-lastName">Soyad</label>
+                          <input id="settings-cust-lastName" name="lastName" type="text" readonly />
+                        </div>
+                        <div>
+                          <label for="settings-cust-city">Şehir</label>
+                          <select id="settings-cust-city" name="city" required>
+                            <option value="">Şehir seçin</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="settings-cust-district">İlçe</label>
+                          <select id="settings-cust-district" name="district" required>
+                            <option value="">İlçe seçin</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="settings-cust-email">E-posta</label>
+                          <input id="settings-cust-email" name="email" type="email" required />
+                        </div>
+                        <div>
+                          <label for="settings-cust-phone">Telefon</label>
+                          <input id="settings-cust-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
+                        </div>
+                      </div>
+                      <div>
+                        <label for="settings-cust-avatar">Profil Fotoğrafı</label>
+                        <input id="settings-cust-avatar" type="file" accept="image/*" />
+                      </div>
+                      <button class="button button-primary" type="submit">Profili Güncelle</button>
+                    </form>
+                  </section>
+
+                  <section id="provider-settings" hidden>
+                    <div class="section-header">
+                      <div>
+                        <p class="eyebrow">Usta</p>
+                        <h2>Profil ve Dükkan Bilgileri</h2>
+                      </div>
+                    </div>
+                    <form id="provider-settings-form" class="stacked-form">
+                      <div class="form-grid">
+                        <div>
+                          <label for="settings-prov-firstName">Ad</label>
+                          <input id="settings-prov-firstName" name="firstName" type="text" readonly />
+                        </div>
+                        <div>
+                          <label for="settings-prov-lastName">Soyad</label>
+                          <input id="settings-prov-lastName" name="lastName" type="text" readonly />
+                        </div>
+                        <div>
+                          <label for="settings-prov-profession">Uzmanlık</label>
+                          <input id="settings-prov-profession" name="profession" type="text" placeholder="Örn. Boya Ustası" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-category">Kategori</label>
+                          <input id="settings-prov-category" name="category" type="text" placeholder="Örn. Boya" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-city">Şehir</label>
+                          <select id="settings-prov-city" name="city" required>
+                            <option value="">Şehir seçin</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="settings-prov-district">İlçe</label>
+                          <select id="settings-prov-district" name="district" required>
+                            <option value="">İlçe seçin</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="settings-prov-shopName">Dükkan Adı</label>
+                          <input id="settings-prov-shopName" name="shopName" type="text" placeholder="Örn. Karadeniz Usta" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-shopAddress">Dükkan Adresi</label>
+                          <input id="settings-prov-shopAddress" name="shopAddress" type="text" placeholder="Mahalle, cadde, sokak" />
+                        </div>
+                      </div>
+                      <div>
+                        <label for="settings-prov-about">Hakkınızda</label>
+                        <textarea id="settings-prov-about" name="about" placeholder="Deneyiminiz, sunduğunuz hizmetler ve uzmanlaştığınız alanlar"></textarea>
+                      </div>
+                      <button class="button button-primary" type="submit">Profili Kaydet</button>
+                    </form>
+
+                    <form id="provider-contact-form" class="stacked-form">
+                      <h3>İletişim Bilgileri</h3>
+                      <div class="form-grid">
+                        <div>
+                          <label for="settings-prov-phone">Telefon</label>
+                          <input id="settings-prov-phone" name="phone" type="tel" placeholder="05xx xxx xx xx" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-email">E-posta</label>
+                          <input id="settings-prov-email" name="email" type="email" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-website">Web sitesi</label>
+                          <input id="settings-prov-website" name="website" type="url" placeholder="https://" />
+                        </div>
+                      </div>
+                      <button class="button button-secondary" type="submit">İletişimi Güncelle</button>
+                    </form>
+
+                    <form id="provider-media-form" class="stacked-form">
+                      <h3>Medya Merkezi</h3>
+                      <div class="form-grid">
+                        <div>
+                          <label for="settings-prov-avatar">Profil Fotoğrafı</label>
+                          <input id="settings-prov-avatar" type="file" accept="image/*" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-banner">Kapak Fotoğrafı</label>
+                          <input id="settings-prov-banner" type="file" accept="image/*" />
+                        </div>
+                        <div>
+                          <label for="settings-prov-gallery">Galeri (birden fazla seçin)</label>
+                          <input id="settings-prov-gallery" type="file" accept="image/*" multiple />
+                        </div>
+                      </div>
+                      <button class="button button-secondary" type="submit">Medya Güncelle</button>
+                    </form>
+                    <div class="media-preview" id="settings-media-preview"></div>
+                  </section>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <aside class="profile-sidebar">
+          <article class="card profile-section">
+            <h2>İpuçları</h2>
+            <ul class="stat-list">
+              <li><strong>Ad ve Soyad</strong><span>Kayıt sonrası değiştirilemez.</span></li>
+              <li><strong>Güncel Konum</strong><span>Talep ve bildirim eşleşmesi için şehrinizi güncel tutun.</span></li>
+              <li><strong>Medya</strong><span>JPEG/PNG görselleri kullanın.</span></li>
+            </ul>
+          </article>
+        </aside>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> TrabzonİşBul.
+    </footer>
+
+    <script type="module" src="/js/settings.js"></script>
+  </body>
+</html>

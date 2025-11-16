@@ -11,6 +11,8 @@ const professionEl = document.getElementById('profile-profession');
 const metaEl = document.getElementById('profile-meta');
 const aboutEl = document.getElementById('profile-about');
 const contactEl = document.getElementById('profile-contact');
+const shopEl = document.getElementById('profile-shop');
+const shopCard = document.getElementById('shop-card');
 const tagsEl = document.getElementById('profile-tags');
 const gallerySection = document.getElementById('gallery-section');
 const galleryGrid = document.getElementById('profile-gallery');
@@ -138,6 +140,20 @@ async function loadProvider() {
         const empty = document.createElement('li');
         empty.textContent = 'Usta henüz iletişim bilgisi paylaşmadı.';
         contactEl.appendChild(empty);
+      }
+    }
+
+    if (shopEl && shopCard) {
+      shopEl.innerHTML = '';
+      const shopRows = [
+        createContactItem('Dükkan Adı', provider.shopName),
+        createContactItem('Dükkan Adresi', provider.shopAddress),
+      ].filter(Boolean);
+      if (shopRows.length) {
+        shopEl.append(...shopRows);
+        shopCard.hidden = false;
+      } else {
+        shopCard.hidden = true;
       }
     }
 

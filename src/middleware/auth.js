@@ -40,4 +40,5 @@ function authMiddleware(db, options = {}) {
 module.exports = {
   createToken,
   authMiddleware,
+  authenticate,
 };
