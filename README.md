@@ -63,6 +63,7 @@ Gizli bilgiler `.env` dosyasında kaldığı sürece depoya eklenmez ve Git geç
 
 - `POST /api/auth/register` — rol seçimi ile yeni kullanıcı kaydı
 - `POST /api/auth/login` — mevcut kullanıcı girişi
+- `POST /api/auth/verify` — e-posta ile iletilen doğrulama kodunu onaylama
 
 ### Usta (Service Provider)
 
@@ -88,6 +89,7 @@ Gizli bilgiler `.env` dosyasında kaldığı sürece depoya eklenmez ve Git geç
 ### Yönetici
 
 - `GET /api/admin/summary` — ustalar, müşteriler, talepler ve teklifler için özet veri
+- `PUT /api/admin/users/:id/role` — bir kullanıcının rolünü (usta/müşteri/admin) güncelleme
 - `DELETE /api/admin/providers/:id` — belirtilen ustayı ve ilişkili tekliflerini kaldırma
 - `DELETE /api/admin/customers/:id` — müşteriyi ve taleplerini kaldırma
 - `DELETE /api/admin/requests/:id` — bir talebi tüm teklifleriyle silme
@@ -101,8 +103,8 @@ Bu proje artık JSON yerine SQLite kullanan güvenli bir temel üzerine kuruludu
 
 - JWT ile 7 günlük süreli oturumlar ve `Authorization` header kontrolü.
 - `/api` altında CSRF koruması ve istemcide otomatik CSRF token alma (bkz. `public/js/common.js`).
-- `express-rate-limit` ve 5 başarısız girişten sonra 15 dakikalık bloke ile kaba kuvvet engelleme.
-- Yalnızca izinli origin'lere açılan CORS (`ALLOWED_ORIGINS`) ve admin işlemleri için `authMiddleware` + rol kontrolü.
+- `express-rate-limit` ile POST/PUT/DELETE isteklerine standart hız sınırı ve 5 başarısız girişten sonra 15 dakikalık bloke (SQLite tabanlı kayıt) ile kaba kuvvet engelleme; talep oluşturma için ek kısıtlama.
+- Yalnızca izinli origin'lere açılan CORS (`ALLOWED_ORIGINS`) ve admin işlemleri için `authMiddleware` + rol kontrolü. Production ortamında ortam değişkeniyle tanımlı admin hesabı kullanılır, geliştirmede veritabanında `role=admin` kullanıcılar yönetim paneline erişebilir.
 - Görsel yüklemelerinde MIME/boyut doğrulaması, rastgele dosya adları ve kullanıcı bazlı dizinler altında saklama.
 - Tüm serbest metin alanları XSS'e karşı HTML encode edilerek saklanır.
 

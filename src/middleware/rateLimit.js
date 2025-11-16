@@ -15,4 +15,19 @@ const authLimiter = rateLimit({
   message: { message: 'Giriş denemesi sınırına ulaşıldı. Lütfen daha sonra tekrar deneyin.' },
 });
 
-module.exports = { standardLimiter, authLimiter };
+const mutateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 120,
+  legacyHeaders: false,
+  message: { message: 'Çok fazla işlem yapıldı. Lütfen daha sonra tekrar deneyin.' },
+});
+
+const requestsLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  legacyHeaders: false,
+  message: { message: 'Talep oluşturma sınırına ulaşıldı. Lütfen daha sonra tekrar deneyin.' },
+});
+
+module.exports = { standardLimiter, authLimiter, mutateLimiter, requestsLimiter };

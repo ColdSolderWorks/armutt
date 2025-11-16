@@ -1,12 +1,13 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const { v4: uuid } = require('uuid');
+const crypto = require('crypto');
+const { v4: uuid, validate: validateUuid } = require('uuid');
 const bcrypt = require('bcrypt');
 const { authMiddleware, createToken } = require('./src/middleware/auth');
 const { errorHandler } = require('./src/middleware/error');
 const { csrfProtection } = require('./src/middleware/csrf');
-const { standardLimiter, authLimiter } = require('./src/middleware/rateLimit');
+const { standardLimiter, authLimiter, mutateLimiter, requestsLimiter } = require('./src/middleware/rateLimit');
 const { requireOwnership } = require('./src/middleware/ownership');
 const { openDatabase, run, get, all } = require('./src/db');
 const {
@@ -18,6 +19,7 @@ const {
   validateEmail,
   validatePasswordComplexity,
   comparePassword,
+  timingSafeCompare,
 } = require('./src/services/users');
 const { normalizeText, normalizeLocation, REGIONS } = require('./src/utils/regions');
 const { hasProfanity } = require('./src/utils/profanity');
@@ -36,13 +38,15 @@ const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH ? String(process.env
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.toLowerCase() : null;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : null;
 
-const FAILED_ATTEMPTS = new Map();
 const MAX_ATTEMPTS = 5;
 const BLOCK_WINDOW_MS = 15 * 60 * 1000;
 
 const app = express();
 const db = openDatabase();
 
+if (!ALLOWED_ORIGINS.length && process.env.NODE_ENV === 'production') {
+  throw new Error('Production ortamında ALLOWED_ORIGINS tanımlanmalıdır.');
+}
 const allowedOrigins = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : ['http://localhost:3000'];
 const corsOptions = {
   origin(origin, callback) {
@@ -54,10 +58,20 @@ const corsOptions = {
   credentials: true,
 };
 
+app.use((req, _res, next) => {
+  req.requestId = crypto.randomUUID();
+  return next();
+});
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(cors(corsOptions));
 app.use(standardLimiter);
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    return mutateLimiter(req, res, next);
+  }
+  return next();
+});
 app.use(express.static(PUBLIC_DIR));
 
 app.use('/api', csrfProtection);
@@ -74,28 +88,44 @@ app.get('/api/categories', (_req, res) => {
   res.json(['Boya', 'Nakliyat', 'Temizlik', 'Tadilat', 'Elektrik', 'Marangoz', 'Beyaz Eşya', 'Özel Ders']);
 });
 
-function isBlocked(email) {
-  const entry = FAILED_ATTEMPTS.get(email);
-  if (!entry) return false;
-  if (Date.now() - entry.time > BLOCK_WINDOW_MS) {
-    FAILED_ATTEMPTS.delete(email);
+function validateIdParam(param) {
+  return (req, res, next) => {
+    const value = req.params[param];
+    if (!validateUuid(value)) {
+      return res.status(400).json({ message: 'Geçersiz kimlik değeri.' });
+    }
+    return next();
+  };
+}
+
+async function isBlocked(email) {
+  const row = await get(db, 'SELECT failures, last_attempt FROM login_attempts WHERE email = ?', [email]);
+  if (!row) return false;
+  const lastAttemptMs = (row.last_attempt || 0) * 1000;
+  if (Date.now() - lastAttemptMs > BLOCK_WINDOW_MS) {
+    await run(db, 'DELETE FROM login_attempts WHERE email = ?', [email]);
     return false;
   }
-  return entry.count >= MAX_ATTEMPTS;
+  return row.failures >= MAX_ATTEMPTS;
 }
 
-function recordFailure(email) {
-  const existing = FAILED_ATTEMPTS.get(email) || { count: 0, time: Date.now() };
-  FAILED_ATTEMPTS.set(email, { count: existing.count + 1, time: existing.time });
+async function recordFailure(email) {
+  const now = Math.floor(Date.now() / 1000);
+  await run(
+    db,
+    `INSERT INTO login_attempts (email, failures, last_attempt) VALUES (?, 1, ?)
+     ON CONFLICT(email) DO UPDATE SET failures=login_attempts.failures+1, last_attempt=excluded.last_attempt`,
+    [email, now],
+  );
 }
 
-function clearFailures(email) {
-  FAILED_ATTEMPTS.delete(email);
+async function clearFailures(email) {
+  await run(db, 'DELETE FROM login_attempts WHERE email = ?', [email]);
 }
 
 app.post('/api/auth/register', authLimiter, async (req, res, next) => {
   try {
-    const { firstName, lastName, email, password, role, profession, category, city, district } = req.body || {};
+    const { firstName, lastName, email, password, confirmPassword, role, profession, category, city, district } = req.body || {};
 
     if (!email || !validateEmail(email)) {
       return res.status(400).json({ message: 'Geçerli bir e-posta girin.' });
@@ -105,6 +135,9 @@ app.post('/api/auth/register', authLimiter, async (req, res, next) => {
     }
     if (!['usta', 'musteri'].includes(role)) {
       return res.status(400).json({ message: 'Geçersiz rol.' });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Şifreler eşleşmiyor.' });
     }
 
     const existing = await get(db, 'SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
@@ -124,7 +157,10 @@ app.post('/api/auth/register', authLimiter, async (req, res, next) => {
       district,
     });
 
-    res.json({ message: 'Kayıt oluşturuldu. E-posta doğrulaması gerekiyor.', verificationCode, userId });
+    // Do not leak verification code to the client; log once for ops visibility
+    // eslint-disable-next-line no-console
+    console.info(`[${req.requestId}] doğrulama kodu üretildi`);
+    res.json({ message: 'Kayıt oluşturuldu. E-posta doğrulaması gerekiyor.', userId });
   } catch (error) {
     next(error);
   }
@@ -137,7 +173,7 @@ app.post('/api/auth/verify', authLimiter, async (req, res, next) => {
       return res.status(400).json({ message: 'Doğrulama bilgileri eksik.' });
     }
     const user = await get(db, 'SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
-    if (!user || user.verification_code !== code) {
+    if (!user || !timingSafeCompare(user.verification_code, code)) {
       return res.status(400).json({ message: 'Doğrulama kodu hatalı.' });
     }
     await run(db, 'UPDATE users SET verified = 1, verification_code = NULL WHERE id = ?', [user.id]);
@@ -156,33 +192,34 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
       return res.status(400).json({ message: 'E-posta ve şifre gereklidir.' });
     }
     const loweredEmail = email.toLowerCase();
-    if (isBlocked(loweredEmail)) {
+    if (await isBlocked(loweredEmail)) {
       return res.status(429).json({ message: 'Çok sayıda hatalı giriş. Lütfen birkaç dakika sonra tekrar deneyin.' });
     }
 
-    if (ADMIN_EMAIL && ADMIN_PASSWORD && loweredEmail === ADMIN_EMAIL.toLowerCase()) {
-      const ok = ADMIN_PASSWORD_HASH ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH) : password === ADMIN_PASSWORD;
+    const envAdminEnabled = process.env.NODE_ENV === 'production' && ADMIN_EMAIL && ADMIN_PASSWORD;
+    if (envAdminEnabled && loweredEmail === ADMIN_EMAIL.toLowerCase()) {
+      const ok = ADMIN_PASSWORD_HASH ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH) : timingSafeCompare(password, ADMIN_PASSWORD);
       if (!ok) {
-        recordFailure(loweredEmail);
+        await recordFailure(loweredEmail);
         return res.status(401).json({ message: 'Geçersiz bilgiler.' });
       }
-      clearFailures(loweredEmail);
+      await clearFailures(loweredEmail);
       const token = createToken({ sub: 'admin', role: 'admin', email: ADMIN_EMAIL });
       return res.json({ message: 'Giriş başarılı.', user: { id: 'admin', role: 'admin', email: ADMIN_EMAIL, token } });
     }
 
     const user = await get(db, 'SELECT * FROM users WHERE email = ?', [loweredEmail]);
     if (!user || !user.verified) {
-      recordFailure(loweredEmail);
+      await recordFailure(loweredEmail);
       return res.status(401).json({ message: 'Geçersiz bilgiler.' });
     }
     const ok = await comparePassword(password, user.password_hash);
     if (!ok) {
-      recordFailure(loweredEmail);
+      await recordFailure(loweredEmail);
       return res.status(401).json({ message: 'Geçersiz bilgiler.' });
     }
 
-    clearFailures(loweredEmail);
+    await clearFailures(loweredEmail);
     const token = createToken({ sub: user.id, role: user.role, email: user.email });
     const payload = buildUserResponse(user, token);
     res.json({ message: 'Giriş başarılı.', user: payload });
@@ -208,7 +245,7 @@ app.get('/api/providers', async (req, res, next) => {
   }
 });
 
-app.get('/api/providers/:id', async (req, res, next) => {
+app.get('/api/providers/:id', validateIdParam('id'), async (req, res, next) => {
   try {
     const provider = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!provider || provider.role !== 'usta') {
@@ -220,7 +257,7 @@ app.get('/api/providers/:id', async (req, res, next) => {
   }
 });
 
-app.put('/api/providers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.put('/api/providers/:id', validateIdParam('id'), authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
     const provider = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!provider || provider.role !== 'usta') {
@@ -234,7 +271,7 @@ app.put('/api/providers/:id', authMiddleware(db), requireOwnership, async (req, 
   }
 });
 
-app.get('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.get('/api/customers/:id', validateIdParam('id'), authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
     const user = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!user || user.role !== 'musteri') {
@@ -246,7 +283,7 @@ app.get('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, 
   }
 });
 
-app.put('/api/customers/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.put('/api/customers/:id', validateIdParam('id'), authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
     const user = await get(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!user || user.role !== 'musteri') {
@@ -308,7 +345,7 @@ app.get('/api/requests', authMiddleware(db), async (_req, res, next) => {
   }
 });
 
-app.get('/api/requests/customer/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.get('/api/requests/customer/:id', validateIdParam('id'), authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
     const requests = await all(db, 'SELECT * FROM requests WHERE customer_id = ?', [req.params.id]);
     const enriched = await Promise.all(
@@ -323,7 +360,7 @@ app.get('/api/requests/customer/:id', authMiddleware(db), requireOwnership, asyn
   }
 });
 
-app.get('/api/requests/provider/:id', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.get('/api/requests/provider/:id', validateIdParam('id'), authMiddleware(db), requireOwnership, async (req, res, next) => {
   try {
     const offers = await all(db, 'SELECT DISTINCT request_id FROM offers WHERE provider_id = ?', [req.params.id]);
     const requestIds = offers.map((entry) => entry.request_id);
@@ -342,7 +379,7 @@ app.get('/api/requests/provider/:id', authMiddleware(db), requireOwnership, asyn
   }
 });
 
-app.post('/api/requests', authMiddleware(db), requireOwnership, async (req, res, next) => {
+app.post('/api/requests', authMiddleware(db), requireOwnership, requestsLimiter, async (req, res, next) => {
   try {
     if (req.user.role !== 'musteri') {
       return res.status(403).json({ message: 'Sadece müşteriler talep oluşturabilir.' });
@@ -372,7 +409,7 @@ app.post('/api/requests', authMiddleware(db), requireOwnership, async (req, res,
   }
 });
 
-app.post('/api/requests/:id/offers', authMiddleware(db), async (req, res, next) => {
+app.post('/api/requests/:id/offers', validateIdParam('id'), authMiddleware(db), async (req, res, next) => {
   try {
     if (req.user.role !== 'usta') {
       return res.status(403).json({ message: 'Sadece ustalar teklif verebilir.' });
@@ -402,7 +439,7 @@ app.post('/api/requests/:id/offers', authMiddleware(db), async (req, res, next) 
   }
 });
 
-app.post('/api/requests/:id/offers/:offerId/accept', authMiddleware(db), async (req, res, next) => {
+app.post('/api/requests/:id/offers/:offerId/accept', validateIdParam('id'), validateIdParam('offerId'), authMiddleware(db), async (req, res, next) => {
   try {
     const request = await get(db, 'SELECT * FROM requests WHERE id = ?', [req.params.id]);
     if (!request) return res.status(404).json({ message: 'Talep bulunamadı.' });
@@ -438,7 +475,21 @@ app.get('/api/admin/summary', authMiddleware(db, { role: 'admin' }), async (_req
   }
 });
 
-app.delete('/api/admin/providers/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+app.put('/api/admin/users/:id/role', validateIdParam('id'), authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+  try {
+    const { role } = req.body || {};
+    const allowedRoles = ['usta', 'musteri', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ message: 'Geçersiz rol değeri.' });
+    }
+    await run(db, 'UPDATE users SET role=? WHERE id = ?', [role, req.params.id]);
+    res.json({ message: 'Kullanıcı rolü güncellendi.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/providers/:id', validateIdParam('id'), authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
   try {
     await run(db, 'DELETE FROM users WHERE id = ? AND role = "usta"', [req.params.id]);
     res.json({ message: 'Usta silindi.' });
@@ -447,7 +498,7 @@ app.delete('/api/admin/providers/:id', authMiddleware(db, { role: 'admin' }), as
   }
 });
 
-app.delete('/api/admin/customers/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+app.delete('/api/admin/customers/:id', validateIdParam('id'), authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
   try {
     await run(db, 'DELETE FROM users WHERE id = ? AND role = "musteri"', [req.params.id]);
     res.json({ message: 'Müşteri silindi.' });
@@ -456,7 +507,7 @@ app.delete('/api/admin/customers/:id', authMiddleware(db, { role: 'admin' }), as
   }
 });
 
-app.delete('/api/admin/requests/:id', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+app.delete('/api/admin/requests/:id', validateIdParam('id'), authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
   try {
     await run(db, 'DELETE FROM requests WHERE id = ?', [req.params.id]);
     res.json({ message: 'Talep silindi.' });
@@ -465,7 +516,7 @@ app.delete('/api/admin/requests/:id', authMiddleware(db, { role: 'admin' }), asy
   }
 });
 
-app.delete('/api/admin/requests/:requestId/offers/:offerId', authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
+app.delete('/api/admin/requests/:requestId/offers/:offerId', validateIdParam('requestId'), validateIdParam('offerId'), authMiddleware(db, { role: 'admin' }), async (req, res, next) => {
   try {
     await run(db, 'DELETE FROM offers WHERE id = ? AND request_id = ?', [req.params.offerId, req.params.requestId]);
     res.json({ message: 'Teklif silindi.' });

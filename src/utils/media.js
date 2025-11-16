@@ -42,7 +42,7 @@ function sanitizeRelativePath(value) {
 }
 
 async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
+  await fs.mkdir(dirPath, { recursive: true, mode: 0o750 });
 }
 
 async function saveMedia(dataUrl, baseDir) {

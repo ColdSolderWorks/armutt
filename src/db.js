@@ -42,6 +42,13 @@ function openDatabase() {
       )
     `);
     db.run(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        email TEXT PRIMARY KEY,
+        failures INTEGER DEFAULT 0,
+        last_attempt INTEGER DEFAULT (strftime('%s','now'))
+      )
+    `);
+    db.run(`
       CREATE TABLE IF NOT EXISTS requests (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

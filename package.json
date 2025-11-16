@@ -4,7 +4,8 @@
   "description": "TrabzonIsBul full-stack marketplace clone built with Node.js and JSON storage.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest"
   },
   "keywords": [
     "trabzon",
@@ -21,8 +22,12 @@
     "csurf": "^1.11.0",
     "express": "^5.1.0",
     "express-rate-limit": "^7.4.0",
+    "he": "^1.2.0",
     "jsonwebtoken": "^9.0.2",
     "sqlite3": "^5.1.7",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0"
   }
 }

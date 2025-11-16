@@ -1,18 +1,13 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+const he = require('he');
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const ALLOWED_MIMES = ['image/jpeg', 'image/png'];
 
 function sanitizeText(input) {
   if (!input) return '';
-  return String(input)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .trim();
+  return he.escape(String(input).trim());
 }
 
 function validatePasswordComplexity(password) {
@@ -21,6 +16,13 @@ function validatePasswordComplexity(password) {
 
 function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || '');
+}
+
+function timingSafeCompare(a, b) {
+  const aBuf = Buffer.from(String(a || ''));
+  const bBuf = Buffer.from(String(b || ''));
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
 function randomFileName(extension = 'bin') {
@@ -44,4 +46,5 @@ module.exports = {
   hashPassword,
   comparePassword,
   ALLOWED_MIMES,
+  timingSafeCompare,
 };
