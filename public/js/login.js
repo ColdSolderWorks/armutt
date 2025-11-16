@@ -1,0 +1,33 @@
+import { redirectAuthenticated, apiRequest, setSession, renderAlert, deriveRole } from './common.js';
+
+redirectAuthenticated();
+
+const form = document.getElementById('login-form');
+const feedback = document.getElementById('feedback');
+
+form?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  renderAlert(feedback, null, '');
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  try {
+    const { user, message } = await apiRequest('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    setSession(user);
+    renderAlert(feedback, 'success', message || 'Giriş başarılı.');
+    const role = deriveRole(user.access);
+    setTimeout(() => {
+      if (role === 'admin') {
+        window.location.replace('/admin-dashboard.html');
+      } else if (role === 'usta') {
+        window.location.replace('/provider-dashboard.html');
+      } else {
+        window.location.replace('/customer-dashboard.html');
+      }
+    }, 400);
+  } catch (error) {
+    renderAlert(feedback, 'error', error.message);
+  }
+});
